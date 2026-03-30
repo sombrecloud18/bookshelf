@@ -1,7 +1,7 @@
 <template>
-  <aside>
+  <aside class="fixed left-0 top-16 h-[calc(100vh-4rem)] w-64 bg-gray-100 shadow-lg overflow-y-auto">
     <nav>
-      <ul class="pbs-3 bg-gray-100 h-screen">
+      <ul class="pt-3">
         <li
           v-for="item in menuItems"
           :key="item.path"

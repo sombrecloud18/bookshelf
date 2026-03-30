@@ -13,12 +13,19 @@ declare module 'vue' {
   export interface GlobalComponents {
     AppHeader: typeof import('./src/components/AppHeader.vue')['default']
     AppSidebar: typeof import('./src/components/AppSidebar.vue')['default']
+    Card: typeof import('./src/components/Card.vue')['default']
     RouterLink: typeof import('vue-router')['RouterLink']
     RouterView: typeof import('vue-router')['RouterView']
+    UAlert: typeof import('./node_modules/@nuxt/ui/dist/runtime/components/Alert.vue')['default']
     UApp: typeof import('./node_modules/@nuxt/ui/dist/runtime/components/App.vue')['default']
+    UAvatar: typeof import('./node_modules/@nuxt/ui/dist/runtime/components/Avatar.vue')['default']
     UButton: typeof import('./node_modules/@nuxt/ui/dist/runtime/components/Button.vue')['default']
     UCard: typeof import('./node_modules/@nuxt/ui/dist/runtime/components/Card.vue')['default']
+    UForm: typeof import('./node_modules/@nuxt/ui/dist/runtime/components/Form.vue')['default']
+    UFormField: typeof import('./node_modules/@nuxt/ui/dist/runtime/components/FormField.vue')['default']
     UHeader: typeof import('./node_modules/@nuxt/ui/dist/runtime/components/Header.vue')['default']
     UIcon: typeof import('./node_modules/@nuxt/ui/dist/runtime/vue/components/Icon.vue')['default']
+    UInput: typeof import('./node_modules/@nuxt/ui/dist/runtime/components/Input.vue')['default']
+    USelect: typeof import('./node_modules/@nuxt/ui/dist/runtime/components/Select.vue')['default']
   }
 }

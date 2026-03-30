@@ -5,6 +5,9 @@ import OrdersPage from '../pages/OrdersPage/OrdersPage.vue';
 import ReviewsPage from '../pages/ReviewsPage/ReviewsPage.vue';
 import MainPage from '../pages/MainPage/MainPage.vue';
 import AppLayout from '../layouts/AppLayout.vue';
+import LoginPage from '../pages/auth/LoginPage.vue';
+import RegistrationPage from '../pages/auth/RegistrationPage.vue';
+import Page404 from '../pages/Page404/Page404.vue';
 
 const routes = [
   {
@@ -37,6 +40,21 @@ const routes = [
         component: ReviewsPage,
       },
     ],
+  },
+  {
+    path: '/auth',
+    name: 'login',
+    component: LoginPage,
+  },
+  {
+    path: '/registration',
+    name: 'registration',
+    component: RegistrationPage,
+  },
+  {
+    path: '/:pathMatch(.*)*',
+    name: 'not-found',
+    component: Page404,
   },
 ];
 

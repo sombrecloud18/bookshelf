@@ -1,16 +1,22 @@
-import { defineConfig } from 'vite'
-import vue from '@vitejs/plugin-vue'
-import { fileURLToPath, URL } from 'node:url'
-import ui from '@nuxt/ui/vite'
+import { defineConfig } from 'vite';
+import vue from '@vitejs/plugin-vue';
+import { fileURLToPath, URL } from 'node:url';
+import ui from '@nuxt/ui/vite';
 
 export default defineConfig({
   plugins: [
     vue(),
-    ui()
+    ui({
+      ui: {
+        colors: {
+          primary: 'blue',
+        },
+      },
+    }),
   ],
   resolve: {
     alias: {
-      '@': fileURLToPath(new URL('./src', import.meta.url))
-    }
-  }
-})
+      '@': fileURLToPath(new URL('./src', import.meta.url)),
+    },
+  },
+});
