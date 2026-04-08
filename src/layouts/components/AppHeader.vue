@@ -1,3 +1,26 @@
+<script setup>
+import { computed, ref } from 'vue';
+import { useRouter } from 'vue-router';
+
+const AUTH_TOKEN_KEY = 'bookshelf_auth_token';
+
+const router = useRouter();
+const logoutOpen = ref(false);
+
+const isAuthed = computed(() => !!localStorage.getItem(AUTH_TOKEN_KEY));
+
+function requestLogout() {
+  logoutOpen.value = true;
+}
+
+function logout() {
+  localStorage.removeItem(AUTH_TOKEN_KEY);
+  localStorage.removeItem('bookshelf_auth_login');
+  logoutOpen.value = false;
+  router.push('/auth');
+}
+</script>
+
 <template>
   <header class="bg-blue-900 p-4 flex justify-between fixed top-0 left-0 right-0 z-10 h-16">
     <router-link to="/" class="flex items-center gap-2">
@@ -13,6 +36,20 @@
         />
       </svg>
     </router-link>
-    <UButton color="secondary">Выйти</UButton>
+
+    <UButton v-if="isAuthed" color="secondary" @click="requestLogout">Выйти</UButton>
   </header>
+
+  <UModal v-model:open="logoutOpen" title="Выход из аккаунта" class="z-100">
+    <template #body>
+      <div class="text-sm text-gray-700">Вы уверены, что хотите выйти?</div>
+    </template>
+
+    <template #footer>
+      <div class="flex justify-end gap-3 w-full">
+        <UButton variant="outline" @click="logoutOpen = false">Отмена</UButton>
+        <UButton color="error" @click="logout">Выйти</UButton>
+      </div>
+    </template>
+  </UModal>
 </template>

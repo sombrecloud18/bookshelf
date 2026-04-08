@@ -1,4 +1,4 @@
-<script setup lang="ts">
+<script setup>
 import AppHeader from './components/AppHeader.vue';
 import AppSidebar from './components/AppSidebar.vue';
 </script>
