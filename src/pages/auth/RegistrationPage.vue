@@ -6,6 +6,7 @@ import { faculties, courses, specialtiesData } from '../../constants/studyData.j
 import AppHeader from '../../layouts/components/AppHeader.vue';
 
 const AUTH_TOKEN_KEY = 'bookshelf_auth_token';
+const AUTH_ROLE_KEY = 'bookshelf_auth_role';
 
 const router = useRouter();
 const loading = ref(false);
@@ -50,6 +51,7 @@ async function submit() {
 
   // Пока без API: сохраняем профиль локально + ставим токен
   localStorage.setItem(AUTH_TOKEN_KEY, `token_${Date.now()}`);
+  localStorage.setItem(AUTH_ROLE_KEY, 'user');
   localStorage.setItem(
     'bookshelf_profile',
     JSON.stringify({

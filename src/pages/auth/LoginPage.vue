@@ -4,6 +4,7 @@ import { useRouter } from 'vue-router';
 import AppHeader from '../../layouts/components/AppHeader.vue';
 
 const AUTH_TOKEN_KEY = 'bookshelf_auth_token';
+const AUTH_ROLE_KEY = 'bookshelf_auth_role';
 
 const router = useRouter();
 const loading = ref(false);
@@ -25,11 +26,15 @@ async function submit() {
   await new Promise(r => setTimeout(r, 300));
   loading.value = false;
 
-  // Пока без API: просто ставим токен
+  // Пока без API: простая проверка роли администратора
+  // admin/admin -> роль admin, иначе user
+  const role = form.login.trim() === 'admin' && form.password === 'admin' ? 'admin' : 'user';
+
   localStorage.setItem(AUTH_TOKEN_KEY, `token_${Date.now()}`);
   localStorage.setItem('bookshelf_auth_login', form.login.trim());
+  localStorage.setItem(AUTH_ROLE_KEY, role);
 
-  router.push('/');
+  router.push(role === 'admin' ? '/admin' : '/');
 }
 </script>
 

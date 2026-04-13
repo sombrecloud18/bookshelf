@@ -1,6 +1,9 @@
 <script setup>
 import { computed, reactive, ref } from 'vue';
+import { useRouter } from 'vue-router';
 import { getGenreColor } from '../../constants/genreColors';
+
+const router = useRouter();
 
 const booksCatalog = [
   {
@@ -43,6 +46,7 @@ const reviews = reactive([
     coverUrl: 'https://cdn21vek.by/img/galleries/9475/355/eksmo_9475355_ecbee5c8328985f84402e430947ecd9e.jpg',
     rating: 5,
     text: 'В центре повествования — талантливый, но бедный и гордый писатель. Роман читается легко, при этом оставляет сильное послевкусие и заставляет задуматься о выборе и ответственности.\n\nОсобенно понравилась атмосфера и то, как автор раскрывает характеры. Некоторые моменты кажутся наивными, но в целом это не мешает цельности истории.',
+    createdAt: '2026-04-10',
   },
 ]);
 
@@ -132,6 +136,7 @@ function addReview() {
     coverUrl: b.coverUrl,
     rating: addRating.value,
     text,
+    createdAt: new Date().toISOString().split('T')[0],
   });
   addOpen.value = false;
 }
@@ -149,6 +154,11 @@ function deleteReview(id) {
     editingId.value = null;
     isEditing.value = false;
   }
+}
+
+// Переход на страницу книги
+function goToBook(bookId) {
+  router.push(`/book/${bookId}`);
 }
 </script>
 
@@ -170,16 +180,22 @@ function deleteReview(id) {
         >
           <div class="grid grid-cols-1 lg:grid-cols-[240px_1fr] gap-6 p-6">
             <div class="flex items-center justify-center">
-              <div class="w-full max-w-[200px] aspect-2/3 rounded-2xl bg-gray-100 overflow-hidden shadow-md">
+              <div
+                class="w-full max-w-[200px] aspect-2/3 rounded-2xl bg-gray-100 overflow-hidden shadow-md cursor-pointer hover:opacity-90 transition-opacity"
+                @click="goToBook(review.bookId)"
+              >
                 <img class="w-full h-full object-cover" :src="review.coverUrl" :alt="review.bookTitle" />
               </div>
             </div>
 
             <div class="flex flex-col">
               <div class="flex items-start justify-between gap-4">
-                <div>
+                <div class="flex-1">
                   <div class="flex items-center gap-3 flex-wrap">
-                    <h2 class="text-2xl font-bold text-black leading-tight">
+                    <h2
+                      class="text-2xl font-bold text-black leading-tight cursor-pointer hover:text-blue-600 transition-colors"
+                      @click="goToBook(review.bookId)"
+                    >
                       {{ review.bookTitle }}
                     </h2>
                     <span
@@ -190,21 +206,22 @@ function deleteReview(id) {
                     </span>
                   </div>
                   <p class="text-md text-gray-800 mt-1">{{ review.author }}</p>
+                  <p class="text-xs text-gray-400 mt-1">{{ review.createdAt }}</p>
                 </div>
 
                 <div class="flex gap-2">
                   <UButton
                     size="sm"
                     variant="ghost"
-                    color="red"
+                    color="primary"
                     class="rounded-xl"
-                    aria-label="Удалить"
-                    @click="deleteReview(review.id)"
+                    aria-label="Подробнее о книге"
+                    @click="goToBook(review.bookId)"
                   >
                     <svg viewBox="0 0 24 24" class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2">
-                      <path d="M3 6h18" />
-                      <path d="M8 6V4h8v2" />
-                      <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6" />
+                      <path
+                        d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"
+                      />
                     </svg>
                   </UButton>
                   <UButton
@@ -218,6 +235,20 @@ function deleteReview(id) {
                     <svg viewBox="0 0 24 24" class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2">
                       <path d="M12 20h9" />
                       <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5Z" />
+                    </svg>
+                  </UButton>
+                  <UButton
+                    size="sm"
+                    variant="ghost"
+                    color="red"
+                    class="rounded-xl"
+                    aria-label="Удалить"
+                    @click="deleteReview(review.id)"
+                  >
+                    <svg viewBox="0 0 24 24" class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2">
+                      <path d="M3 6h18" />
+                      <path d="M8 6V4h8v2" />
+                      <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6" />
                     </svg>
                   </UButton>
                 </div>
@@ -277,12 +308,23 @@ function deleteReview(id) {
                   <p class="text-gray-700 whitespace-pre-wrap">{{ review.text }}</p>
                 </div>
               </div>
+
+              <div class="mt-4 pt-2 flex justify-end">
+                <UButton size="sm" variant="outline" class="rounded-xl" @click="goToBook(review.bookId)">
+                  Подробнее о книге →
+                </UButton>
+              </div>
             </div>
           </div>
         </UCard>
       </div>
 
-      <div v-else class="bg-white rounded-2xl p-6 text-black">Рецензий пока нет.</div>
+      <div v-else class="bg-white rounded-2xl p-6 text-black text-center">
+        <p class="text-lg">У вас пока нет рецензий</p>
+        <UButton class="mt-4 bg-white text-black rounded-xl" variant="outline" @click="openAdd">
+          Написать первую рецензию
+        </UButton>
+      </div>
     </div>
   </div>
 

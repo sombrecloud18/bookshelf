@@ -1,5 +1,30 @@
 <template>
-  <UCard variant="soft" class="hover:shadow-xl transition-all duration-300 rounded-2xl bg-white flex flex-col h-full">
+  <UCard
+    variant="soft"
+    class="hover:shadow-xl transition-all duration-300 rounded-2xl bg-white flex flex-col h-full relative"
+  >
+    <!-- Иконка сердечка -->
+    <button
+      class="absolute top-3 right-3 z-10 p-2 rounded-full bg-white/80 hover:bg-white transition-all duration-200 shadow-md"
+      :class="isOrdered ? 'text-red-500' : 'text-gray-400'"
+      aria-label="Добавить в заказы"
+      @click="$emit('toggle-order')"
+    >
+      <svg
+        class="w-5 h-5"
+        :fill="isOrdered ? 'currentColor' : 'none'"
+        :stroke="isOrdered ? 'currentColor' : 'currentColor'"
+        stroke-width="1.5"
+        viewBox="0 0 24 24"
+      >
+        <path
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          d="M21 8.25c0-2.485-2.099-4.5-4.688-4.5-1.935 0-3.597 1.126-4.312 2.733-.715-1.607-2.377-2.733-4.313-2.733C5.1 3.75 3 5.765 3 8.25c0 7.22 9 12 9 12s9-4.78 9-12z"
+        />
+      </svg>
+    </button>
+
     <div>
       <div>
         <span class="inline-flex px-4 py-1 text-sm font-medium rounded-md" :class="getGenreColor(genre)">
@@ -21,88 +46,20 @@
 
     <div class="flex gap-2 justify-center mt-4 pt-2">
       <UButton size="md" color="primary" class="flex-1 justify-center" @click="reserve"> Забронировать </UButton>
-      <UButton size="md" variant="outline" class="flex-1 justify-center" @click="detailsOpen = true">
-        Подробнее
-      </UButton>
+      <UButton size="md" variant="outline" class="flex-1 justify-center" @click="goToBookPage"> Подробнее </UButton>
     </div>
   </UCard>
-
-  <Teleport to="body">
-    <div
-      v-if="detailsOpen"
-      class="fixed inset-0 z-50 flex items-center justify-center p-6"
-      role="dialog"
-      aria-modal="true"
-      @keydown.esc="detailsOpen = false"
-      tabindex="0"
-      ref="modalRootEl"
-    >
-      <button
-        type="button"
-        class="absolute inset-0 bg-black/50"
-        aria-label="Закрыть"
-        @click="detailsOpen = false"
-      />
-
-      <div class="relative w-[min(1100px,calc(100vw-3rem))] max-w-[1100px] bg-white rounded-3xl shadow-2xl overflow-hidden">
-        <div class="flex items-center justify-between gap-3 px-6 py-4 border-b border-gray-100">
-          <div class="font-semibold text-black line-clamp-1">{{ title }}</div>
-          <UButton variant="ghost" color="neutral" class="rounded-xl" @click="detailsOpen = false" aria-label="Закрыть">
-            ✕
-          </UButton>
-        </div>
-
-        <div class="p-6">
-          <div class="grid grid-cols-1 lg:grid-cols-[340px_1fr] gap-6">
-            <div class="flex items-center justify-center">
-              <div class="w-full aspect-2/3 rounded-2xl bg-gray-100 shadow-md flex items-center justify-center max-h-[52vh] overflow-hidden">
-                <img class="max-h-full max-w-full object-contain" :src="imageUrl" :alt="title" />
-              </div>
-            </div>
-
-            <div class="flex flex-col">
-              <div class="flex items-start justify-between gap-4">
-                <div>
-                  <h2 class="text-2xl font-bold text-black leading-tight">{{ title }}</h2>
-                  <p class="text-base text-gray-800 mt-1">{{ author }}</p>
-                </div>
-
-                <span class="inline-flex px-4 py-1 text-sm font-medium rounded-full" :class="getGenreColor(genre)">
-                  {{ genre }}
-                </span>
-              </div>
-
-              <div class="mt-4">
-                <div class="text-sm font-semibold text-black">Аннотация:</div>
-                <div v-if="description" class="mt-2 text-sm text-gray-700 whitespace-pre-line leading-snug line-clamp-8">
-                  {{ description }}
-                </div>
-                <div v-else class="mt-2 text-sm text-gray-500">Описание пока не добавлено.</div>
-              </div>
-
-              <div class="mt-4 text-sm text-gray-800">
-                <span class="font-semibold text-black">Год написания:</span>
-                <span>{{ year || '—' }}</span>
-              </div>
-
-              <div class="mt-auto pt-6 flex items-center justify-end gap-3">
-                <UButton variant="outline" class="rounded-xl" @click="writeReview">Написать рецензию</UButton>
-                <UButton color="primary" class="rounded-xl" @click="reserve">Забронировать</UButton>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  </Teleport>
 </template>
 
 <script setup>
-import { nextTick, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import { getGenreColor } from '../constants/genreColors';
 
 const props = defineProps({
+  id: {
+    type: String,
+    required: true,
+  },
   title: {
     type: String,
     default: 'Скорбь сатаны',
@@ -127,26 +84,24 @@ const props = defineProps({
     type: [String, Number],
     default: '',
   },
+  isOrdered: {
+    type: Boolean,
+    default: false,
+  },
 });
 
-const detailsOpen = ref(false);
+const emit = defineEmits(['toggle-order']);
 const router = useRouter();
-const modalRootEl = ref(null);
-
-watch(detailsOpen, async (open) => {
-  if (!open) return;
-  await nextTick();
-  modalRootEl.value?.focus?.();
-});
 
 function reserve() {
   window.open('https://library.bsuir.by/', '_blank', 'noopener,noreferrer');
 }
 
-function writeReview() {
-  // Минимально: переходим на страницу рецензий.
-  // Позже можно прокинуть выбранную книгу через store/route params.
-  detailsOpen.value = false;
-  router.push('/reviews');
+function goToBookPage() {
+  if (props.id) {
+    router.push(`/book/${props.id}`);
+  } else {
+    console.error('ID книги не передан в Card компонент');
+  }
 }
 </script>

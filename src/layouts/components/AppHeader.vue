@@ -3,11 +3,14 @@ import { computed, ref } from 'vue';
 import { useRouter } from 'vue-router';
 
 const AUTH_TOKEN_KEY = 'bookshelf_auth_token';
+const AUTH_ROLE_KEY = 'bookshelf_auth_role';
 
 const router = useRouter();
 const logoutOpen = ref(false);
 
 const isAuthed = computed(() => !!localStorage.getItem(AUTH_TOKEN_KEY));
+const role = computed(() => localStorage.getItem(AUTH_ROLE_KEY) || 'user');
+const homePath = computed(() => (role.value === 'admin' ? '/admin' : '/'));
 
 function requestLogout() {
   logoutOpen.value = true;
@@ -16,6 +19,7 @@ function requestLogout() {
 function logout() {
   localStorage.removeItem(AUTH_TOKEN_KEY);
   localStorage.removeItem('bookshelf_auth_login');
+  localStorage.removeItem(AUTH_ROLE_KEY);
   logoutOpen.value = false;
   router.push('/auth');
 }
@@ -23,7 +27,7 @@ function logout() {
 
 <template>
   <header class="bg-blue-900 p-4 flex justify-between fixed top-0 left-0 right-0 z-10 h-16">
-    <router-link to="/" class="flex items-center gap-2">
+    <router-link :to="homePath" class="flex items-center gap-2">
       <span class="text-white text-2xl font-thin">Bookshelf</span>
       <svg width="39" height="42" viewBox="0 0 39 54" fill="none" xmlns="http://www.w3.org/2000/svg">
         <path
