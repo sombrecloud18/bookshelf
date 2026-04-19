@@ -1,0 +1,1553 @@
+================================================================================
+  ПЛАН РЕАЛИЗАЦИИ БЭКЕНДА
+  «Студенческий литературный форум»
+  Spring Boot 3.2 + PostgreSQL + Flyway + Spring Security (JWT)
+================================================================================
+
+Документ составлен на основе:
+  – Глава 1 (анализ предметной области, модули, требования)
+  – Глава 2 (портреты пользователей, сценарии, эскизы интерфейсов, эргономика)
+  – Глава 3 (архитектура, Spring Boot, Vue.js, PostgreSQL)
+  – Диаграмма вариантов использования (drawio)
+  – Полный анализ фронтенда (все Vue-компоненты, stores, router, constants)
+
+================================================================================
+СОДЕРЖАНИЕ
+================================================================================
+  1. Логическая схема базы данных (ER-диаграмма)
+  2. Репозитории (Spring Data JPA)
+  3. Сервисы (бизнес-логика)
+  4. REST API (контроллеры)
+  5. Безопасность и разграничение доступа
+  6. Дополнительные требования
+  7. Последовательность реализации (MVP → расширения)
+
+================================================================================
+1. ЛОГИЧЕСКАЯ СХЕМА БАЗЫ ДАННЫХ
+================================================================================
+
+Все таблицы используют UUID в качестве первичных ключей.
+Временные поля: created_at, updated_at — TIMESTAMP WITH TIME ZONE, DEFAULT NOW().
+
+--------------------------------------------------------------------------------
+1.1 Таблица users (Пользователи)
+--------------------------------------------------------------------------------
+
+  Столбец              | Тип                | Ограничения
+  ---------------------|--------------------|-----------------------------------
+  id                   | UUID               | PK, DEFAULT uuid_generate_v4()
+  login                | VARCHAR(100)       | NOT NULL, UNIQUE
+  email                | VARCHAR(255)       | NOT NULL, UNIQUE
+  password_hash        | VARCHAR(255)       | NOT NULL
+  first_name           | VARCHAR(100)       | NOT NULL
+  last_name            | VARCHAR(100)       | NOT NULL
+  patronymic           | VARCHAR(100)       |
+  faculty              | VARCHAR(50)        |
+  specialty            | VARCHAR(100)       |
+  course               | VARCHAR(20)        |
+  phone_number         | VARCHAR(30)        |
+  avatar_url           | VARCHAR(500)       |
+  role                 | VARCHAR(20)        | NOT NULL, DEFAULT 'USER'
+                       |                    | CHECK (role IN ('USER','MODERATOR'))
+  is_blocked           | BOOLEAN            | DEFAULT FALSE
+  created_at           | TIMESTAMPTZ        | DEFAULT NOW()
+  updated_at           | TIMESTAMPTZ        | DEFAULT NOW()
+
+  Индексы:
+    – idx_users_login ON users(login)
+    – idx_users_email ON users(email)
+
+  Примечание: роли — USER и MODERATOR (в интерфейсе модератор
+  называется «Администратор», но в БД — MODERATOR для ясности).
+
+--------------------------------------------------------------------------------
+1.2 Таблица books (Книги)
+--------------------------------------------------------------------------------
+
+  Столбец              | Тип                | Ограничения
+  ---------------------|--------------------|-----------------------------------
+  id                   | UUID               | PK, DEFAULT uuid_generate_v4()
+  title                | VARCHAR(500)       | NOT NULL
+  author               | VARCHAR(255)       | NOT NULL
+  genre                | VARCHAR(100)       |
+  year                 | INTEGER            |
+  description          | TEXT               |
+  full_description     | TEXT               |
+  image_url            | VARCHAR(500)       |
+  cover_url            | VARCHAR(500)       |
+  pages                | INTEGER            |
+  publisher            | VARCHAR(255)       |
+  publish_year         | INTEGER            |
+  isbn                 | VARCHAR(20)        | UNIQUE
+  search_vector        | TSVECTOR           | — для полнотекстового поиска
+  created_at           | TIMESTAMPTZ        | DEFAULT NOW()
+  updated_at           | TIMESTAMPTZ        | DEFAULT NOW()
+
+  Индексы:
+    – idx_books_title ON books(title)
+    – idx_books_search ON books USING GIN(search_vector)
+
+  Триггер:
+    search_vector автоматически обновляется при INSERT/UPDATE:
+      search_vector = to_tsvector('russian', coalesce(title,'') || ' ' ||
+                      coalesce(author,'') || ' ' || coalesce(description,''))
+
+  Примечание: поле author — строка, не FK на таблицу авторов.
+  Фронтенд работает с автором как со строковым полем книги.
+
+--------------------------------------------------------------------------------
+1.3 Таблица reviews (Рецензии)
+--------------------------------------------------------------------------------
+
+  Столбец              | Тип                | Ограничения
+  ---------------------|--------------------|-----------------------------------
+  id                   | UUID               | PK, DEFAULT uuid_generate_v4()
+  book_id              | UUID               | NOT NULL, FK → books(id) ON DELETE CASCADE
+  user_id              | UUID               | NOT NULL, FK → users(id) ON DELETE CASCADE
+  rating               | INTEGER            | NOT NULL, CHECK (1..5)
+  text                 | TEXT               | NOT NULL, CHECK(length(text) >= 200)
+  status               | VARCHAR(20)        | NOT NULL, DEFAULT 'PENDING'
+                       |                    | CHECK (status IN ('DRAFT','PENDING','APPROVED','REJECTED'))
+  likes                | INTEGER            | DEFAULT 0
+  created_at           | TIMESTAMPTZ        | DEFAULT NOW()
+  updated_at           | TIMESTAMPTZ        | DEFAULT NOW()
+
+  Индексы:
+    – idx_reviews_book_id ON reviews(book_id)
+    – idx_reviews_user_id ON reviews(user_id)
+    – idx_reviews_status  ON reviews(status)
+  Уникальность:
+    – UNIQUE(book_id, user_id) — один пользователь = одна рецензия на книгу
+
+--------------------------------------------------------------------------------
+1.4 Таблица comments (Комментарии)
+--------------------------------------------------------------------------------
+
+  Столбец              | Тип                | Ограничения
+  ---------------------|--------------------|-----------------------------------
+  id                   | UUID               | PK, DEFAULT uuid_generate_v4()
+  review_id            | UUID               | FK → reviews(id) ON DELETE CASCADE
+  collection_id        | UUID               | FK → collections(id) ON DELETE CASCADE
+  user_id              | UUID               | NOT NULL, FK → users(id) ON DELETE CASCADE
+  text                 | TEXT               | NOT NULL
+  likes                | INTEGER            | DEFAULT 0
+  created_at           | TIMESTAMPTZ        | DEFAULT NOW()
+  updated_at           | TIMESTAMPTZ        | DEFAULT NOW()
+
+  Ограничение:
+    – CHECK(review_id IS NOT NULL OR collection_id IS NOT NULL) —
+      комментарий привязан к рецензии ИЛИ к подборке.
+
+  Индексы:
+    – idx_comments_review_id ON comments(review_id)
+    – idx_comments_collection_id ON comments(collection_id)
+    – idx_comments_user_id ON comments(user_id)
+
+--------------------------------------------------------------------------------
+1.5 Таблица collections (Подборки)
+--------------------------------------------------------------------------------
+
+  Столбец              | Тип                | Ограничения
+  ---------------------|--------------------|-----------------------------------
+  id                   | UUID               | PK, DEFAULT uuid_generate_v4()
+  user_id              | UUID               | NOT NULL, FK → users(id) ON DELETE CASCADE
+  title                | VARCHAR(255)       | NOT NULL
+  genre                | VARCHAR(100)       |
+  description          | TEXT               |
+  status               | VARCHAR(20)        | NOT NULL, DEFAULT 'DRAFT'
+                       |                    | CHECK (status IN ('DRAFT','PENDING','APPROVED','REJECTED'))
+  created_at           | TIMESTAMPTZ        | DEFAULT NOW()
+  updated_at           | TIMESTAMPTZ        | DEFAULT NOW()
+
+  Индексы:
+    – idx_collections_user_id ON collections(user_id)
+    – idx_collections_status  ON collections(status)
+
+--------------------------------------------------------------------------------
+1.6 Таблица collection_books (Книги в подборке, M:N с порядком)
+--------------------------------------------------------------------------------
+
+  Столбец              | Тип                | Ограничения
+  ---------------------|--------------------|-----------------------------------
+  collection_id        | UUID               | NOT NULL, FK → collections(id) ON DELETE CASCADE
+  book_id              | UUID               | NOT NULL, FK → books(id) ON DELETE CASCADE
+  position             | INTEGER            | NOT NULL DEFAULT 0 — для drag-and-drop
+  PRIMARY KEY (collection_id, book_id)
+
+--------------------------------------------------------------------------------
+1.7 Таблица subject_collections (Предметные подборки)
+--------------------------------------------------------------------------------
+
+  Столбец              | Тип                | Ограничения
+  ---------------------|--------------------|-----------------------------------
+  id                   | UUID               | PK, DEFAULT uuid_generate_v4()
+  user_id              | UUID               | NOT NULL, FK → users(id) ON DELETE CASCADE
+  subject              | VARCHAR(100)       | NOT NULL (напр. "ОПИ", "БД")
+  specialty            | VARCHAR(50)        | NOT NULL (код: "2-40 01 01")
+  specialty_name       | VARCHAR(255)       | NOT NULL (напр. "ПОИТ")
+  title                | VARCHAR(255)       | NOT NULL
+  description          | TEXT               |
+  author_role          | VARCHAR(20)        | CHECK (author_role IN ('teacher','student'))
+  status               | VARCHAR(20)        | NOT NULL, DEFAULT 'PENDING'
+                       |                    | CHECK (status IN ('PENDING','APPROVED','REJECTED'))
+  moderator_comment    | TEXT               |
+  created_at           | TIMESTAMPTZ        | DEFAULT NOW()
+  updated_at           | TIMESTAMPTZ        | DEFAULT NOW()
+
+  Индексы:
+    – idx_sc_subject ON subject_collections(subject)
+    – idx_sc_specialty ON subject_collections(specialty)
+    – idx_sc_status ON subject_collections(status)
+
+--------------------------------------------------------------------------------
+1.8 Таблица subject_collection_books (Книги в предметной подборке)
+--------------------------------------------------------------------------------
+
+  Столбец              | Тип                | Ограничения
+  ---------------------|--------------------|-----------------------------------
+  subject_collection_id| UUID               | NOT NULL, FK → subject_collections(id) ON DELETE CASCADE
+  book_id              | UUID               | NOT NULL, FK → books(id) ON DELETE CASCADE
+  position             | INTEGER            | DEFAULT 0
+  PRIMARY KEY (subject_collection_id, book_id)
+
+--------------------------------------------------------------------------------
+1.9 Таблица events (Мероприятия)
+--------------------------------------------------------------------------------
+
+  Столбец              | Тип                | Ограничения
+  ---------------------|--------------------|-----------------------------------
+  id                   | UUID               | PK, DEFAULT uuid_generate_v4()
+  title                | VARCHAR(255)       | NOT NULL
+  description          | TEXT               |
+  date                 | DATE               | NOT NULL
+  time                 | VARCHAR(10)        | (формат HH:MM)
+  location             | VARCHAR(255)       |
+  max_participants     | INTEGER            |
+  organizer            | VARCHAR(255)       |
+  created_by           | UUID               | FK → users(id)
+  created_at           | TIMESTAMPTZ        | DEFAULT NOW()
+  updated_at           | TIMESTAMPTZ        | DEFAULT NOW()
+
+  Индексы:
+    – idx_events_date ON events(date)
+
+--------------------------------------------------------------------------------
+1.10 Таблица event_participants (Участники мероприятий)
+--------------------------------------------------------------------------------
+
+  Столбец              | Тип                | Ограничения
+  ---------------------|--------------------|-----------------------------------
+  event_id             | UUID               | NOT NULL, FK → events(id) ON DELETE CASCADE
+  user_id              | UUID               | NOT NULL, FK → users(id) ON DELETE CASCADE
+  registered_at        | TIMESTAMPTZ        | DEFAULT NOW()
+  PRIMARY KEY (event_id, user_id)
+
+--------------------------------------------------------------------------------
+1.11 Таблица orders (Заказы / Бронирования книг)
+--------------------------------------------------------------------------------
+
+  Столбец              | Тип                | Ограничения
+  ---------------------|--------------------|-----------------------------------
+  id                   | UUID               | PK, DEFAULT uuid_generate_v4()
+  user_id              | UUID               | NOT NULL, FK → users(id) ON DELETE CASCADE
+  book_id              | UUID               | NOT NULL, FK → books(id) ON DELETE CASCADE
+  status               | VARCHAR(20)        | DEFAULT 'ACTIVE'
+  created_at           | TIMESTAMPTZ        | DEFAULT NOW()
+
+  Индексы:
+    – idx_orders_user_id ON orders(user_id)
+  Уникальность:
+    – UNIQUE(user_id, book_id) — одна книга = один заказ
+
+  Примечание: фронтенд хранит заказы как массив book_id в localStorage.
+  Бэкенд должен синхронизировать это через API.
+
+--------------------------------------------------------------------------------
+1.12 Таблица user_activity (Активность пользователей — для рекомендаций)
+--------------------------------------------------------------------------------
+
+  Столбец              | Тип                | Ограничения
+  ---------------------|--------------------|-----------------------------------
+  id                   | UUID               | PK, DEFAULT uuid_generate_v4()
+  user_id              | UUID               | NOT NULL, FK → users(id) ON DELETE CASCADE
+  book_id              | UUID               | NOT NULL, FK → books(id) ON DELETE CASCADE
+  activity_type        | VARCHAR(30)        | NOT NULL
+                       |                    | CHECK(activity_type IN ('VIEW','REVIEW','ORDER','COLLECTION'))
+  created_at           | TIMESTAMPTZ        | DEFAULT NOW()
+
+  Индексы:
+    – idx_ua_user_id ON user_activity(user_id)
+    – idx_ua_book_id ON user_activity(book_id)
+
+--------------------------------------------------------------------------------
+1.13 Таблица user_preferences (Предпочтения пользователей)
+--------------------------------------------------------------------------------
+
+  Столбец              | Тип                | Ограничения
+  ---------------------|--------------------|-----------------------------------
+  id                   | UUID               | PK, DEFAULT uuid_generate_v4()
+  user_id              | UUID               | NOT NULL, UNIQUE, FK → users(id) ON DELETE CASCADE
+  favorite_genres      | TEXT[]             | массив строк (PostgreSQL array)
+  favorite_authors     | TEXT[]             | массив строк
+  updated_at           | TIMESTAMPTZ        | DEFAULT NOW()
+
+================================================================================
+1.14 СВЯЗИ МЕЖДУ СУЩНОСТЯМИ
+================================================================================
+
+  users 1───∞ reviews           (user_id → users.id)
+  books 1───∞ reviews           (book_id → books.id)
+  users 1───∞ comments          (user_id → users.id)
+  reviews 1──∞ comments         (review_id → reviews.id)
+  collections 1──∞ comments     (collection_id → collections.id)
+  users 1───∞ collections       (user_id → users.id)
+  collections ∞──∞ books        (через collection_books)
+  users 1───∞ subject_collections (user_id → users.id)
+  subject_collections ∞──∞ books (через subject_collection_books)
+  users 1───∞ orders            (user_id → users.id)
+  books 1───∞ orders            (book_id → books.id)
+  users 1───∞ events            (created_by → users.id)
+  events ∞───∞ users            (через event_participants)
+  users 1───∞ user_activity     (user_id → users.id)
+  books 1───∞ user_activity     (book_id → books.id)
+  users 1───1 user_preferences  (user_id → users.id)
+
+================================================================================
+2. РЕПОЗИТОРИИ (Spring Data JPA)
+================================================================================
+
+Все репозитории расположены в пакете: com.bookshelf.repository
+
+--------------------------------------------------------------------------------
+2.1 UserRepository extends JpaRepository<User, UUID>
+--------------------------------------------------------------------------------
+
+  Optional<User> findByLogin(String login);
+  Optional<User> findByEmail(String email);
+  boolean existsByLogin(String login);
+  boolean existsByEmail(String email);
+  List<User> findByRole(String role);
+  List<User> findByIsBlockedTrue();
+
+  // Для админ-панели: подсчёт пользователей
+  long countByRole(String role);
+
+--------------------------------------------------------------------------------
+2.2 BookRepository extends JpaRepository<Book, UUID>, PagingAndSortingRepository<Book, UUID>
+--------------------------------------------------------------------------------
+
+  Page<Book> findByGenre(String genre, Pageable pageable);
+
+  // Полнотекстовый поиск (PostgreSQL ts_vector)
+  @Query(value = "SELECT * FROM books WHERE search_vector @@ plainto_tsquery('russian', :query) " +
+                 "ORDER BY ts_rank(search_vector, plainto_tsquery('russian', :query)) DESC",
+         countQuery = "SELECT count(*) FROM books WHERE search_vector @@ plainto_tsquery('russian', :query)",
+         nativeQuery = true)
+  Page<Book> searchByText(@Param("query") String query, Pageable pageable);
+
+  // Простой поиск по title/author (ILIKE, fallback)
+  @Query("SELECT b FROM Book b WHERE LOWER(b.title) LIKE LOWER(CONCAT('%',:q,'%')) " +
+         "OR LOWER(b.author) LIKE LOWER(CONCAT('%',:q,'%'))")
+  Page<Book> searchByTitleOrAuthor(@Param("q") String query, Pageable pageable);
+
+  List<Book> findByIdIn(List<UUID> ids);
+
+  // Топ книг по средней оценке (для рекомендаций)
+  @Query(value = "SELECT b.* FROM books b " +
+                 "JOIN reviews r ON r.book_id = b.id AND r.status = 'APPROVED' " +
+                 "GROUP BY b.id ORDER BY AVG(r.rating) DESC LIMIT :limit",
+         nativeQuery = true)
+  List<Book> findTopRatedBooks(@Param("limit") int limit);
+
+  // Случайные книги, которые пользователь не читал (для рекомендаций)
+  @Query(value = "SELECT * FROM books WHERE id NOT IN " +
+                 "(SELECT book_id FROM user_activity WHERE user_id = :userId) " +
+                 "ORDER BY RANDOM() LIMIT :limit",
+         nativeQuery = true)
+  List<Book> findRandomUnreadBooks(@Param("userId") UUID userId, @Param("limit") int limit);
+
+--------------------------------------------------------------------------------
+2.3 ReviewRepository extends JpaRepository<Review, UUID>
+--------------------------------------------------------------------------------
+
+  Page<Review> findByBookIdAndStatus(UUID bookId, String status, Pageable pageable);
+  Page<Review> findByUserId(UUID userId, Pageable pageable);
+  List<Review> findByStatus(String status);
+  Page<Review> findByStatus(String status, Pageable pageable);
+  Optional<Review> findByBookIdAndUserId(UUID bookId, UUID userId);
+  boolean existsByBookIdAndUserId(UUID bookId, UUID userId);
+
+  // Средняя оценка книги
+  @Query("SELECT AVG(r.rating) FROM Review r WHERE r.bookId = :bookId AND r.status = 'APPROVED'")
+  Double getAverageRatingByBookId(@Param("bookId") UUID bookId);
+
+  // Подсчёт ожидающих модерации
+  long countByStatus(String status);
+
+--------------------------------------------------------------------------------
+2.4 CommentRepository extends JpaRepository<Comment, UUID>
+--------------------------------------------------------------------------------
+
+  List<Comment> findByReviewIdOrderByCreatedAtAsc(UUID reviewId);
+  List<Comment> findByCollectionIdOrderByCreatedAtAsc(UUID collectionId);
+  Page<Comment> findByUserId(UUID userId, Pageable pageable);
+
+--------------------------------------------------------------------------------
+2.5 CollectionRepository extends JpaRepository<Collection, UUID>
+--------------------------------------------------------------------------------
+
+  Page<Collection> findByUserId(UUID userId, Pageable pageable);
+  Page<Collection> findByStatus(String status, Pageable pageable);
+  List<Collection> findByStatus(String status);
+
+  // Поиск по ключевым словам
+  @Query("SELECT c FROM Collection c WHERE c.status = 'APPROVED' AND " +
+         "(LOWER(c.title) LIKE LOWER(CONCAT('%',:q,'%')) OR " +
+         " LOWER(c.description) LIKE LOWER(CONCAT('%',:q,'%')) OR " +
+         " LOWER(c.genre) LIKE LOWER(CONCAT('%',:q,'%')))")
+  Page<Collection> searchByKeyword(@Param("q") String query, Pageable pageable);
+
+  // Подсчёт ожидающих
+  long countByStatus(String status);
+
+--------------------------------------------------------------------------------
+2.6 SubjectCollectionRepository extends JpaRepository<SubjectCollection, UUID>
+--------------------------------------------------------------------------------
+
+  List<SubjectCollection> findBySubjectAndSpecialtyAndStatus(String subject, String specialty, String status);
+  Page<SubjectCollection> findByStatus(String status, Pageable pageable);
+  List<SubjectCollection> findByUserId(UUID userId);
+  long countByStatus(String status);
+
+--------------------------------------------------------------------------------
+2.7 EventRepository extends JpaRepository<Event, UUID>
+--------------------------------------------------------------------------------
+
+  // Предстоящие мероприятия
+  @Query("SELECT e FROM Event e WHERE e.date >= CURRENT_DATE ORDER BY e.date ASC, e.time ASC")
+  Page<Event> findUpcoming(Pageable pageable);
+
+  List<Event> findByDateGreaterThanEqualOrderByDateAsc(LocalDate date);
+
+--------------------------------------------------------------------------------
+2.8 EventParticipantRepository extends JpaRepository<EventParticipant, EventParticipantId>
+--------------------------------------------------------------------------------
+
+  List<EventParticipant> findByEventId(UUID eventId);
+  List<EventParticipant> findByUserId(UUID userId);
+  boolean existsByEventIdAndUserId(UUID eventId, UUID userId);
+  long countByEventId(UUID eventId);
+  void deleteByEventIdAndUserId(UUID eventId, UUID userId);
+
+--------------------------------------------------------------------------------
+2.9 OrderRepository extends JpaRepository<Order, UUID>
+--------------------------------------------------------------------------------
+
+  List<Order> findByUserIdAndStatus(UUID userId, String status);
+  List<Order> findByUserId(UUID userId);
+  boolean existsByUserIdAndBookId(UUID userId, UUID bookId);
+  Optional<Order> findByUserIdAndBookId(UUID userId, UUID bookId);
+
+--------------------------------------------------------------------------------
+2.10 UserActivityRepository extends JpaRepository<UserActivity, UUID>
+--------------------------------------------------------------------------------
+
+  List<UserActivity> findByUserId(UUID userId);
+  List<UserActivity> findByUserIdAndActivityType(UUID userId, String activityType);
+
+  // Книги, просмотренные пользователями с похожими интересами (коллаборативная фильтрация)
+  @Query(value = "SELECT ua2.book_id, COUNT(*) as cnt FROM user_activity ua1 " +
+                 "JOIN user_activity ua2 ON ua1.user_id = ua2.user_id AND ua2.book_id != ua1.book_id " +
+                 "WHERE ua1.book_id IN (SELECT book_id FROM user_activity WHERE user_id = :userId) " +
+                 "AND ua2.book_id NOT IN (SELECT book_id FROM user_activity WHERE user_id = :userId) " +
+                 "GROUP BY ua2.book_id ORDER BY cnt DESC LIMIT :limit",
+         nativeQuery = true)
+  List<Object[]> findCollaborativeRecommendations(@Param("userId") UUID userId, @Param("limit") int limit);
+
+--------------------------------------------------------------------------------
+2.11 UserPreferenceRepository extends JpaRepository<UserPreference, UUID>
+--------------------------------------------------------------------------------
+
+  Optional<UserPreference> findByUserId(UUID userId);
+
+================================================================================
+3. СЕРВИСЫ (бизнес-логика)
+================================================================================
+
+Пакет: com.bookshelf.service
+Все сервисы аннотированы @Service.
+Методы с побочными эффектами — @Transactional.
+
+--------------------------------------------------------------------------------
+3.1 UserService
+--------------------------------------------------------------------------------
+
+  ► register(RegisterRequestDTO dto) → AuthResponseDTO
+    Вход: login, email, password, firstName, lastName, patronymic,
+          faculty, specialty, course, phoneNumber, avatarUrl
+    Логика:
+      – Проверить уникальность login и email (иначе 409 Conflict)
+      – Хешировать пароль: BCryptPasswordEncoder.encode(password)
+      – Создать User с role = 'USER'
+      – Сохранить в БД
+      – Сгенерировать JWT-токен
+    Выход: { token, role, user: UserProfileDTO }
+    @Transactional
+
+  ► login(LoginRequestDTO dto) → AuthResponseDTO
+    Вход: login, password
+    Логика:
+      – Найти пользователя по login (иначе 401)
+      – Проверить isBlocked (иначе 403 «Аккаунт заблокирован»)
+      – Сравнить пароль: BCryptPasswordEncoder.matches() (иначе 401)
+      – Сгенерировать JWT-токен
+    Выход: { token, role, user: UserProfileDTO }
+
+  ► getProfile(UUID userId) → UserProfileDTO
+    Вход: userId из JWT-токена
+    Выход: { id, login, email, firstName, lastName, patronymic,
+             faculty, specialty, course, phoneNumber, avatarUrl, role,
+             fullName, studyInfo }
+
+    Формирование полей (соответствие фронтенду):
+      fullName = lastName + " " + firstName + " " + patronymic
+      studyInfo = faculty + ", " + specialty + ", " + course
+
+  ► updateProfile(UUID userId, UpdateProfileDTO dto) → UserProfileDTO
+    Вход: firstName, lastName, patronymic, faculty, specialty, course,
+          phoneNumber, email, avatarUrl
+    Правила:
+      – Пользователь может менять только свой профиль
+      – Если email изменён — проверить уникальность
+    @Transactional
+
+  ► updateAvatar(UUID userId, String avatarUrl) → UserProfileDTO
+    — Отдельный эндпоинт для смены фото профиля
+    @Transactional
+
+  ► changePassword(UUID userId, ChangePasswordDTO dto) → void
+    Вход: currentPassword, newPassword
+    Правила:
+      – Проверить текущий пароль (иначе 400)
+      – Захешировать новый пароль
+    @Transactional
+
+  ► blockUser(UUID userId) → void                 — только MODERATOR
+  ► unblockUser(UUID userId) → void               — только MODERATOR
+    @Transactional
+
+  ► getAllUsers(Pageable pageable) → Page<UserProfileDTO>  — только MODERATOR
+
+--------------------------------------------------------------------------------
+3.2 BookService
+--------------------------------------------------------------------------------
+
+  ► getAllBooks(Pageable pageable) → Page<BookDTO>
+    Выход: { id, title, author, genre, year, description, imageUrl,
+             coverUrl, pages, publisher, publishYear, isbn }
+
+    Маппинг JSON-полей (camelCase, соответствует фронтенду):
+      image_url → imageUrl
+      cover_url → coverUrl
+      full_description → fullDescription
+      publish_year → publishYear
+
+  ► getBookById(UUID id) → BookDetailDTO
+    Выход: все поля BookDTO + fullDescription, pages, publisher,
+           publishYear, isbn, averageRating
+
+  ► searchBooks(String query, Pageable pageable) → Page<BookDTO>
+    Логика:
+      – Если query пустой → вернуть все с пагинацией
+      – Сначала попробовать searchByText (полнотекстовый)
+      – Если нет результатов → fallback на searchByTitleOrAuthor (ILIKE)
+
+  ► createBook(CreateBookDTO dto) → BookDTO         — только MODERATOR
+    @Transactional
+
+  ► updateBook(UUID id, UpdateBookDTO dto) → BookDTO — только MODERATOR
+    @Transactional
+
+  ► deleteBook(UUID id) → void                      — только MODERATOR
+    @Transactional
+
+  ► getBooksByIds(List<UUID> ids) → List<BookDTO>
+    — Для получения книг по массиву id (используется подборками)
+
+--------------------------------------------------------------------------------
+3.3 ReviewService
+--------------------------------------------------------------------------------
+
+  ► createReview(UUID userId, CreateReviewDTO dto) → ReviewDTO
+    Вход: bookId, rating (1-5), text
+    Правила:
+      – Проверить существование книги (иначе 404)
+      – Проверить, что пользователь ещё не писал рецензию на эту книгу (иначе 409)
+      – Минимум 200 символов текста (иначе 400 «Минимальная длина рецензии — 200 символов»)
+      – Статус при создании: PENDING (сразу на модерацию)
+      – Записать user_activity(userId, bookId, 'REVIEW')
+    Выход: ReviewDTO { id, bookId, bookTitle, author, genre, coverUrl,
+                       rating, text, createdAt, status, reviewAuthor,
+                       reviewAuthorName }
+    @Transactional
+
+  ► updateReview(UUID userId, UUID reviewId, UpdateReviewDTO dto) → ReviewDTO
+    Вход: rating, text
+    Правила:
+      – Только автор может редактировать (иначе 403)
+      – Минимум 200 символов
+      – После редактирования статус → PENDING (повторная модерация)
+    @Transactional
+
+  ► deleteReview(UUID userId, UUID reviewId) → void
+    Правила:
+      – Удалить может автор ИЛИ модератор
+    @Transactional
+
+  ► getBookReviews(UUID bookId, Pageable pageable) → Page<ReviewWithCommentsDTO>
+    Выход: { id, bookId, userId, userName, userAvatar, rating, text,
+             createdAt, likes, comments: [ CommentDTO ] }
+    — Возвращает только APPROVED рецензии
+    — Каждая рецензия включает свои комментарии
+
+  ► getUserReviews(UUID userId, Pageable pageable) → Page<UserReviewDTO>
+    Выход: { id, bookId, bookTitle, author, genre, coverUrl, rating,
+             text, createdAt }
+
+  ► getPendingReviews(Pageable pageable) → Page<PendingReviewDTO>
+    — Только MODERATOR
+    Выход: { id, bookId, bookTitle, author, genre, coverUrl, rating,
+             text, reviewAuthor, reviewAuthorName, createdAt, status }
+
+  ► approveReview(UUID reviewId) → ReviewDTO        — только MODERATOR
+    Логика:
+      – Изменить status → APPROVED
+    @Transactional
+
+  ► rejectReview(UUID reviewId) → ReviewDTO         — только MODERATOR
+    Логика:
+      – Изменить status → REJECTED
+    @Transactional
+
+  ► likeReview(UUID reviewId) → void
+    – Увеличить likes на 1
+    @Transactional
+
+  ► getAverageRating(UUID bookId) → Double
+    — Средняя оценка по одобренным рецензиям
+
+--------------------------------------------------------------------------------
+3.4 CollectionService
+--------------------------------------------------------------------------------
+
+  ► createCollection(UUID userId, CreateCollectionDTO dto) → CollectionDTO
+    Вход: title, genre, description, bookIds (список UUID)
+    Логика:
+      – Создать коллекцию со статусом DRAFT
+      – Привязать книги через collection_books с сохранением порядка (position)
+    @Transactional
+
+  ► updateCollection(UUID userId, UUID collectionId, UpdateCollectionDTO dto) → CollectionDTO
+    Вход: title, genre, description, bookIds
+    Правила:
+      – Только автор может редактировать
+      – Пересоздать привязки collection_books с новым порядком
+    @Transactional
+
+  ► deleteCollection(UUID userId, UUID collectionId) → void
+    Правила:
+      – Удалить может автор ИЛИ модератор
+    @Transactional
+
+  ► publishCollection(UUID userId, UUID collectionId) → CollectionDTO
+    — Отправить на модерацию: status → PENDING
+    @Transactional
+
+  ► getUserCollections(UUID userId) → List<CollectionDTO>
+    Выход: { id, title, genre, description, bookIds }
+
+  ► getApprovedCollections(Pageable pageable) → Page<CollectionDTO>
+    — Публичные одобренные подборки
+
+  ► searchCollections(String query, Pageable pageable) → Page<CollectionDTO>
+
+  ► getPendingCollections(Pageable pageable) → Page<PendingCollectionDTO>
+    — Только MODERATOR
+    Выход: { id, title, genre, description, bookIds, author,
+             authorName, createdAt, status }
+
+  ► approveCollection(UUID collectionId) → CollectionDTO — только MODERATOR
+    @Transactional
+
+  ► rejectCollection(UUID collectionId) → CollectionDTO  — только MODERATOR
+    @Transactional
+
+  CollectionDTO поля (соответствие фронтенду):
+    { id, title, genre, description, bookIds: [UUID] }
+
+--------------------------------------------------------------------------------
+3.5 SubjectCollectionService
+--------------------------------------------------------------------------------
+
+  ► createSubjectCollection(UUID userId, CreateSubjectCollectionDTO dto) → SubjectCollectionDTO
+    Вход: subject, specialty, specialtyName, title, description, bookIds, authorRole
+    Логика:
+      – Статус: PENDING
+      – Привязать книги
+    @Transactional
+
+  ► getBySubjectAndSpecialty(String subject, String specialty) → List<SubjectCollectionDTO>
+    — Только APPROVED
+
+  ► getPendingSubjectCollections(Pageable pageable) → Page<SubjectCollectionDTO>
+    — Только MODERATOR
+
+  ► approveSubjectCollection(UUID id, String moderatorComment) → SubjectCollectionDTO
+    @Transactional
+
+  ► rejectSubjectCollection(UUID id, String reason) → void
+    @Transactional
+
+  SubjectCollectionDTO поля (соответствие фронтенду):
+    { id, subject, specialty, specialtyName, title, description,
+      bookIds, author, authorId, authorRole, status, createdAt,
+      moderatorComment }
+
+--------------------------------------------------------------------------------
+3.6 CommentService
+--------------------------------------------------------------------------------
+
+  ► addCommentToReview(UUID userId, UUID reviewId, CreateCommentDTO dto) → CommentDTO
+    Вход: text
+    Правила:
+      – Проверить существование рецензии (иначе 404)
+    @Transactional
+
+  ► addCommentToCollection(UUID userId, UUID collectionId, CreateCommentDTO dto) → CommentDTO
+    @Transactional
+
+  ► updateComment(UUID userId, UUID commentId, UpdateCommentDTO dto) → CommentDTO
+    Правила:
+      – Только автор комментария может редактировать
+    @Transactional
+
+  ► deleteComment(UUID userId, UUID commentId) → void
+    Правила:
+      – Удалить может автор ИЛИ модератор
+    @Transactional
+
+  ► getCommentsForReview(UUID reviewId) → List<CommentDTO>
+    Выход: { id, userId, userName, userAvatar, text, createdAt, likes }
+
+  ► likeComment(UUID commentId) → void
+    @Transactional
+
+  CommentDTO поля (соответствие фронтенду):
+    { id, userId, userName, userAvatar, text, createdAt, likes }
+
+--------------------------------------------------------------------------------
+3.7 EventService
+--------------------------------------------------------------------------------
+
+  ► createEvent(UUID moderatorId, CreateEventDTO dto) → EventDTO
+    Вход: date, title, description, location, time, maxParticipants, organizer
+    Правила:
+      – Только MODERATOR
+    @Transactional
+
+  ► updateEvent(UUID eventId, UpdateEventDTO dto) → EventDTO
+    — Только MODERATOR
+    @Transactional
+
+  ► deleteEvent(UUID eventId) → void
+    — Только MODERATOR
+    @Transactional
+
+  ► getUpcomingEvents(Pageable pageable) → Page<EventDTO>
+    Выход: { id, date, title, description, location, time,
+             maxParticipants, currentParticipants, organizer }
+
+  ► getEventById(UUID eventId) → EventDTO
+
+  ► registerParticipant(UUID userId, UUID eventId) → void
+    Правила:
+      – Проверить, не зарегистрирован ли уже (иначе 409)
+      – Проверить maxParticipants (если задан, и текущее кол-во >= max → 400)
+    @Transactional
+
+  ► unregisterParticipant(UUID userId, UUID eventId) → void
+    @Transactional
+
+  ► isUserRegistered(UUID userId, UUID eventId) → boolean
+
+  EventDTO поля:
+    { id, date, title, description, location, time,
+      maxParticipants, currentParticipants, organizer }
+
+    currentParticipants вычисляется как COUNT из event_participants.
+
+--------------------------------------------------------------------------------
+3.8 RecommendationService
+--------------------------------------------------------------------------------
+
+  ► getPersonalRecommendations(UUID userId) → RecommendationResponseDTO
+    Выход: {
+      personal: [ RecommendationDTO ],   — персональные рекомендации
+      popular:  [ RecommendationDTO ],   — популярные книги
+      new:      [ RecommendationDTO ]    — новые поступления
+    }
+
+    Алгоритм (MVP — простая логика):
+      1. personal (до 10 книг):
+         – Взять жанры из user_preferences.favorite_genres
+         – Найти книги этих жанров с высокими оценками, которые пользователь не читал
+         – Если недостаточно → добавить из коллаборативной фильтрации
+           (findCollaborativeRecommendations)
+         – matchScore = нормализованная оценка релевантности (0.0..1.0)
+      2. popular (до 10 книг):
+         – findTopRatedBooks(10)
+         – views = count(user_activity WHERE book_id = ?)
+      3. new (до 10 книг):
+         – books ORDER BY created_at DESC LIMIT 10
+         – addedDate = book.created_at
+
+    Расширяемость:
+      – Интерфейс RecommendationStrategy с методом recommend(userId)
+      – Реализация SimpleRecommendationStrategy (MVP)
+      – В будущем — MLRecommendationStrategy (подключение ML-модели)
+
+  ► getSimilarBooks(UUID bookId) → SimilarBooksDTO
+    Выход: { similar: [ BookRecommendationDTO ] }
+    Алгоритм (MVP):
+      – Найти книги того же жанра и/или автора, исключая текущую
+      – Ограничить до 6 штук
+
+  ► getUserPreferences(UUID userId) → UserPreferencesDTO
+    Выход: { favoriteGenres, favoriteAuthors, readingHistory }
+
+  ► updateUserPreferences(UUID userId, UpdatePreferencesDTO dto) → UserPreferencesDTO
+    @Transactional
+
+  RecommendationDTO поля (соответствие фронтенду):
+    { id, bookId, title, genre, author, imageUrl, description,
+      matchScore, views, addedDate }
+
+--------------------------------------------------------------------------------
+3.9 OrderService (Бронирование книг)
+--------------------------------------------------------------------------------
+
+  ► addOrder(UUID userId, UUID bookId) → OrderDTO
+    Правила:
+      – Проверить существование книги (иначе 404)
+      – Проверить, не забронирована ли уже (иначе 409)
+      – Записать user_activity(userId, bookId, 'ORDER')
+    @Transactional
+
+  ► removeOrder(UUID userId, UUID bookId) → void
+    @Transactional
+
+  ► getUserOrders(UUID userId) → List<BookDTO>
+    — Возвращает список книг, которые пользователь забронировал
+
+  ► getLibraryUrl(UUID bookId) → String
+    — Формирует URL для переадресации на библиотеку БГУИР
+    — Шаблон: "https://library.bsuir.by/search?isbn=" + book.isbn
+    — Если ISBN нет → fallback на поиск по названию
+
+  OrderDTO:
+    { id, bookId, bookTitle, status, createdAt }
+
+--------------------------------------------------------------------------------
+3.10 AdminDashboardService
+--------------------------------------------------------------------------------
+
+  ► getDashboardStats() → DashboardStatsDTO
+    Выход: [
+      { label: "Рецензий на модерации",  value: countPendingReviews },
+      { label: "Подборок на модерации",  value: countPendingCollections },
+      { label: "Предметных подборок на модерации", value: countPendingSubjectCollections },
+      { label: "Пользователей",          value: countUsers },
+      { label: "Книг в каталоге",        value: countBooks },
+      { label: "Предстоящих мероприятий", value: countUpcomingEvents }
+    ]
+
+================================================================================
+4. REST API (контроллеры)
+================================================================================
+
+Пакет: com.bookshelf.controller
+Базовый путь: /api
+Формат данных: JSON (Content-Type: application/json)
+
+В ответах на ошибки используется единый формат:
+  {
+    "timestamp": "2026-04-19T12:00:00Z",
+    "status": 400,
+    "error": "Bad Request",
+    "message": "Минимальная длина рецензии — 200 символов",
+    "path": "/api/reviews"
+  }
+
+Все сообщения валидации — на русском языке (согласно эргономическим требованиям).
+
+────────────────────────────────────────────────────────────────────────────────
+4.1 AuthController → /api/auth
+────────────────────────────────────────────────────────────────────────────────
+
+  POST /api/auth/register
+    Тело: RegisterRequestDTO
+      { login, email, password, firstName, lastName, patronymic,
+        faculty, specialty, course, phoneNumber, avatarUrl }
+    Ответ 201: AuthResponseDTO
+      { token, role, user: UserProfileDTO }
+    Ошибки:
+      409 — "Пользователь с таким логином уже существует"
+      409 — "Пользователь с таким email уже существует"
+      400 — ошибки валидации
+
+  POST /api/auth/login
+    Тело: LoginRequestDTO { login, password }
+    Ответ 200: AuthResponseDTO { token, role, user: UserProfileDTO }
+    Ошибки:
+      401 — "Неверный логин или пароль"
+      403 — "Аккаунт заблокирован"
+
+────────────────────────────────────────────────────────────────────────────────
+4.2 UserController → /api/users
+────────────────────────────────────────────────────────────────────────────────
+
+  GET /api/users/profile                            — AUTH required
+    Ответ 200: UserProfileDTO
+      { id, login, email, firstName, lastName, patronymic, faculty,
+        specialty, course, phoneNumber, avatarUrl, role,
+        fullName, studyInfo }
+
+  PUT /api/users/profile                            — AUTH required
+    Тело: UpdateProfileDTO
+    Ответ 200: UserProfileDTO
+
+  PUT /api/users/profile/avatar                     — AUTH required
+    Тело: { avatarUrl: String }
+    Ответ 200: UserProfileDTO
+
+  PUT /api/users/password                           — AUTH required
+    Тело: ChangePasswordDTO { currentPassword, newPassword }
+    Ответ 200: { message: "Пароль успешно изменён" }
+    Ошибки:
+      400 — "Текущий пароль неверен"
+
+  PUT /api/users/{userId}/block                     — MODERATOR only
+    Ответ 200: { message: "Пользователь заблокирован" }
+
+  PUT /api/users/{userId}/unblock                   — MODERATOR only
+    Ответ 200: { message: "Пользователь разблокирован" }
+
+  GET /api/users                                    — MODERATOR only
+    Параметры: page, size, sort
+    Ответ 200: Page<UserProfileDTO>
+
+────────────────────────────────────────────────────────────────────────────────
+4.3 BookController → /api/books
+────────────────────────────────────────────────────────────────────────────────
+
+  GET /api/books                                    — PUBLIC
+    Параметры: page, size, sort, query (для поиска), genre
+    Ответ 200: Page<BookDTO>
+
+  GET /api/books/{id}                               — PUBLIC
+    Ответ 200: BookDetailDTO (включая averageRating)
+    Ошибки: 404
+
+  POST /api/books                                   — MODERATOR only
+    Тело: CreateBookDTO
+    Ответ 201: BookDTO
+
+  PUT /api/books/{id}                               — MODERATOR only
+    Тело: UpdateBookDTO
+    Ответ 200: BookDTO
+    Ошибки: 404
+
+  DELETE /api/books/{id}                            — MODERATOR only
+    Ответ 204
+
+  GET /api/books/search?query={q}                   — PUBLIC
+    Параметры: query, page, size
+    Ответ 200: Page<BookDTO>
+
+  POST /api/books/by-ids                            — AUTH required
+    Тело: { ids: [UUID] }
+    Ответ 200: List<BookDTO>
+
+────────────────────────────────────────────────────────────────────────────────
+4.4 ReviewController → /api/reviews
+────────────────────────────────────────────────────────────────────────────────
+
+  POST /api/reviews                                 — AUTH required
+    Тело: CreateReviewDTO { bookId, rating, text }
+    Ответ 201: ReviewDTO
+    Ошибки:
+      400 — "Минимальная длина рецензии — 200 символов"
+      409 — "Вы уже написали рецензию на эту книгу"
+
+  PUT /api/reviews/{id}                             — AUTH required (автор)
+    Тело: UpdateReviewDTO { rating, text }
+    Ответ 200: ReviewDTO
+    Ошибки: 403
+
+  DELETE /api/reviews/{id}                          — AUTH required (автор или MODERATOR)
+    Ответ 204
+
+  GET /api/books/{bookId}/reviews                   — PUBLIC
+    Параметры: page, size, sort
+    Ответ 200: Page<ReviewWithCommentsDTO>
+      [{ id, bookId, userId, userName, userAvatar, rating, text,
+         createdAt, likes, comments: [CommentDTO] }]
+
+  GET /api/reviews/my                               — AUTH required
+    Параметры: page, size
+    Ответ 200: Page<UserReviewDTO>
+      [{ id, bookId, bookTitle, author, genre, coverUrl, rating,
+         text, createdAt }]
+
+  GET /api/reviews/pending                          — MODERATOR only
+    Параметры: page, size
+    Ответ 200: Page<PendingReviewDTO>
+
+  PUT /api/reviews/{id}/approve                     — MODERATOR only
+    Ответ 200: ReviewDTO
+
+  PUT /api/reviews/{id}/reject                      — MODERATOR only
+    Ответ 200: ReviewDTO
+
+  POST /api/reviews/{id}/like                       — AUTH required
+    Ответ 200
+
+────────────────────────────────────────────────────────────────────────────────
+4.5 CommentController → /api/comments
+────────────────────────────────────────────────────────────────────────────────
+
+  POST /api/reviews/{reviewId}/comments             — AUTH required
+    Тело: { text: String }
+    Ответ 201: CommentDTO
+
+  POST /api/collections/{collectionId}/comments     — AUTH required
+    Тело: { text: String }
+    Ответ 201: CommentDTO
+
+  PUT /api/comments/{id}                            — AUTH required (автор)
+    Тело: { text: String }
+    Ответ 200: CommentDTO
+
+  DELETE /api/comments/{id}                         — AUTH required (автор или MODERATOR)
+    Ответ 204
+
+  GET /api/reviews/{reviewId}/comments              — PUBLIC
+    Ответ 200: List<CommentDTO>
+
+  POST /api/comments/{id}/like                      — AUTH required
+    Ответ 200
+
+────────────────────────────────────────────────────────────────────────────────
+4.6 CollectionController → /api/collections
+────────────────────────────────────────────────────────────────────────────────
+
+  POST /api/collections                             — AUTH required
+    Тело: CreateCollectionDTO { title, genre, description, bookIds }
+    Ответ 201: CollectionDTO
+
+  PUT /api/collections/{id}                         — AUTH required (автор)
+    Тело: UpdateCollectionDTO { title, genre, description, bookIds }
+    Ответ 200: CollectionDTO
+
+  DELETE /api/collections/{id}                      — AUTH required (автор или MODERATOR)
+    Ответ 204
+
+  PUT /api/collections/{id}/publish                 — AUTH required (автор)
+    Ответ 200: CollectionDTO (status → PENDING)
+
+  GET /api/collections/my                           — AUTH required
+    Ответ 200: List<CollectionDTO>
+
+  GET /api/collections                              — PUBLIC
+    Параметры: page, size, query (поиск)
+    Ответ 200: Page<CollectionDTO> (только APPROVED)
+
+  GET /api/collections/{id}                         — PUBLIC
+    Ответ 200: CollectionDetailDTO (с книгами)
+
+  GET /api/collections/pending                      — MODERATOR only
+    Ответ 200: Page<PendingCollectionDTO>
+
+  PUT /api/collections/{id}/approve                 — MODERATOR only
+    Ответ 200: CollectionDTO
+
+  PUT /api/collections/{id}/reject                  — MODERATOR only
+    Ответ 200: CollectionDTO
+
+────────────────────────────────────────────────────────────────────────────────
+4.7 SubjectCollectionController → /api/subject-collections
+────────────────────────────────────────────────────────────────────────────────
+
+  POST /api/subject-collections                     — AUTH required
+    Тело: CreateSubjectCollectionDTO
+    Ответ 201: SubjectCollectionDTO
+
+  GET /api/subject-collections?subject={s}&specialty={sp} — PUBLIC
+    Ответ 200: List<SubjectCollectionDTO> (только APPROVED)
+
+  GET /api/subject-collections/pending              — MODERATOR only
+    Ответ 200: Page<SubjectCollectionDTO>
+
+  PUT /api/subject-collections/{id}/approve         — MODERATOR only
+    Тело: { moderatorComment: String }
+    Ответ 200: SubjectCollectionDTO
+
+  PUT /api/subject-collections/{id}/reject          — MODERATOR only
+    Тело: { reason: String }
+    Ответ 200
+
+────────────────────────────────────────────────────────────────────────────────
+4.8 EventController → /api/events
+────────────────────────────────────────────────────────────────────────────────
+
+  GET /api/events                                   — PUBLIC
+    Параметры: page, size
+    Ответ 200: Page<EventDTO>
+      [{ id, date, title, description, location, time,
+         maxParticipants, currentParticipants, organizer }]
+
+  GET /api/events/{id}                              — PUBLIC
+    Ответ 200: EventDTO
+
+  POST /api/events                                  — MODERATOR only
+    Тело: CreateEventDTO { date, title, description, location, time,
+                           maxParticipants, organizer }
+    Ответ 201: EventDTO
+
+  PUT /api/events/{id}                              — MODERATOR only
+    Тело: UpdateEventDTO
+    Ответ 200: EventDTO
+
+  DELETE /api/events/{id}                           — MODERATOR only
+    Ответ 204
+
+  POST /api/events/{id}/register                    — AUTH required
+    Ответ 200: { message: "Вы зарегистрированы на мероприятие" }
+    Ошибки:
+      409 — "Вы уже зарегистрированы на это мероприятие"
+      400 — "Достигнуто максимальное количество участников"
+
+  DELETE /api/events/{id}/register                  — AUTH required
+    Ответ 200: { message: "Регистрация отменена" }
+
+  GET /api/events/{id}/is-registered                — AUTH required
+    Ответ 200: { registered: boolean }
+
+────────────────────────────────────────────────────────────────────────────────
+4.9 OrderController → /api/orders
+────────────────────────────────────────────────────────────────────────────────
+
+  GET /api/orders                                   — AUTH required
+    Ответ 200: List<BookDTO> (книги текущего пользователя)
+
+  POST /api/orders                                  — AUTH required
+    Тело: { bookId: UUID }
+    Ответ 201: OrderDTO
+    Ошибки: 409 — "Книга уже добавлена в заказы"
+
+  DELETE /api/orders/{bookId}                       — AUTH required
+    Ответ 204
+
+  GET /api/orders/library-url/{bookId}              — AUTH required
+    Ответ 200: { url: String }
+    — Возвращает URL библиотеки БГУИР для бронирования
+
+────────────────────────────────────────────────────────────────────────────────
+4.10 RecommendationController → /api/recommendations
+────────────────────────────────────────────────────────────────────────────────
+
+  GET /api/recommendations/personal                 — AUTH required
+    Ответ 200: RecommendationResponseDTO
+      { personal: [{ id, bookId, title, genre, author, imageUrl,
+                     description, matchScore }],
+        popular:  [{ id, bookId, title, genre, author, imageUrl,
+                     description, views }],
+        new:      [{ id, bookId, title, genre, author, imageUrl,
+                     description, addedDate }] }
+
+  GET /api/recommendations/similar/{bookId}         — PUBLIC
+    Ответ 200: { similar: [{ id, bookId, title, genre, author,
+                             imageUrl, description }] }
+
+────────────────────────────────────────────────────────────────────────────────
+4.11 UserPreferenceController → /api/user/preferences
+────────────────────────────────────────────────────────────────────────────────
+
+  GET /api/user/preferences                         — AUTH required
+    Ответ 200: UserPreferencesDTO
+      { favoriteGenres: [...], favoriteAuthors: [...], readingHistory: [...] }
+
+  POST /api/user/preferences                        — AUTH required
+    Тело: action object (определяется фронтендом)
+    Ответ 200: UserPreferencesDTO
+
+────────────────────────────────────────────────────────────────────────────────
+4.12 AdminController → /api/admin
+────────────────────────────────────────────────────────────────────────────────
+
+  GET /api/admin/stats                              — MODERATOR only
+    Ответ 200: [ { label: String, value: Number } ]
+
+────────────────────────────────────────────────────────────────────────────────
+4.13 HealthController → /api/health
+────────────────────────────────────────────────────────────────────────────────
+
+  GET /api/health                                   — PUBLIC
+    Ответ 200: { status: "UP" }
+    — Используется Docker healthcheck
+
+================================================================================
+5. БЕЗОПАСНОСТЬ И РАЗГРАНИЧЕНИЕ ДОСТУПА
+================================================================================
+
+5.1 Стек безопасности:
+  – Spring Security 6.x
+  – JWT (JSON Web Token) — io.jsonwebtoken:jjwt 0.12.x
+  – BCrypt для хеширования паролей
+
+5.2 JWT-конфигурация:
+  – Секрет: из application.properties (jwt.secret)
+  – Время жизни: 24 часа (jwt.expiration=86400000)
+  – Передача: Header "Authorization: Bearer <token>"
+  – Payload: { sub: userId, role: "USER"|"MODERATOR", iat, exp }
+
+5.3 SecurityFilterChain:
+
+  @Bean
+  SecurityFilterChain filterChain(HttpSecurity http) {
+    http
+      .csrf(csrf -> csrf.disable())
+      .cors(cors -> cors.configurationSource(corsConfigurationSource()))
+      .sessionManagement(sm -> sm.sessionCreationPolicy(STATELESS))
+      .authorizeHttpRequests(auth -> auth
+        // Открытые эндпоинты
+        .requestMatchers(POST, "/api/auth/**").permitAll()
+        .requestMatchers(GET, "/api/health").permitAll()
+        .requestMatchers(GET, "/api/books/**").permitAll()
+        .requestMatchers(GET, "/api/collections").permitAll()
+        .requestMatchers(GET, "/api/collections/{id}").permitAll()
+        .requestMatchers(GET, "/api/events/**").permitAll()
+        .requestMatchers(GET, "/api/recommendations/similar/**").permitAll()
+        .requestMatchers(GET, "/api/subject-collections").permitAll()
+
+        // Только модератор
+        .requestMatchers("/api/admin/**").hasRole("MODERATOR")
+        .requestMatchers(PUT, "/api/reviews/*/approve").hasRole("MODERATOR")
+        .requestMatchers(PUT, "/api/reviews/*/reject").hasRole("MODERATOR")
+        .requestMatchers(PUT, "/api/collections/*/approve").hasRole("MODERATOR")
+        .requestMatchers(PUT, "/api/collections/*/reject").hasRole("MODERATOR")
+        .requestMatchers(PUT, "/api/subject-collections/*/approve").hasRole("MODERATOR")
+        .requestMatchers(PUT, "/api/subject-collections/*/reject").hasRole("MODERATOR")
+        .requestMatchers("/api/reviews/pending").hasRole("MODERATOR")
+        .requestMatchers("/api/collections/pending").hasRole("MODERATOR")
+        .requestMatchers("/api/subject-collections/pending").hasRole("MODERATOR")
+        .requestMatchers(POST, "/api/events").hasRole("MODERATOR")
+        .requestMatchers(PUT, "/api/events/**").hasRole("MODERATOR")
+        .requestMatchers(DELETE, "/api/events/**").hasRole("MODERATOR")
+        .requestMatchers(POST, "/api/books").hasRole("MODERATOR")
+        .requestMatchers(PUT, "/api/books/**").hasRole("MODERATOR")
+        .requestMatchers(DELETE, "/api/books/**").hasRole("MODERATOR")
+        .requestMatchers(PUT, "/api/users/*/block").hasRole("MODERATOR")
+        .requestMatchers(PUT, "/api/users/*/unblock").hasRole("MODERATOR")
+
+        // Все остальные — аутентифицированные пользователи
+        .anyRequest().authenticated()
+      )
+      .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class);
+    return http.build();
+  }
+
+5.4 JwtAuthenticationFilter:
+  – Извлекает токен из заголовка Authorization
+  – Валидирует подпись и срок действия
+  – Устанавливает SecurityContext с userId и ролью
+  – При невалидном токене — пропускает без аутентификации (401 для protected endpoints)
+
+5.5 Роли в системе:
+  – USER     — обычный пользователь (студент/преподаватель)
+  – MODERATOR — администратор/модератор контента
+
+  В фронтенде роли хранятся как:
+    bookshelf_auth_role = 'user' | 'admin'
+
+  Маппинг бэкенд → фронтенд:
+    USER      → 'user'
+    MODERATOR → 'admin'
+
+================================================================================
+6. ДОПОЛНИТЕЛЬНЫЕ ТРЕБОВАНИЯ
+================================================================================
+
+6.1 Пагинация и сортировка:
+  – Все списковые эндпоинты поддерживают параметры: page, size, sort
+  – По умолчанию: page=0, size=20
+  – Формат ответа Spring Page: { content, totalPages, totalElements, number, size }
+  – Сортировка: sort=createdAt,desc (по умолчанию — сначала новые)
+
+6.2 Валидация входных данных (Bean Validation):
+  Все DTO аннотированы javax.validation:
+    @NotBlank(message = "Поле обязательно для заполнения")
+    @Size(min = 200, message = "Минимальная длина рецензии — 200 символов")
+    @Email(message = "Некорректный формат email")
+    @Min(value = 1, message = "Оценка должна быть от 1 до 5")
+    @Max(value = 5, message = "Оценка должна быть от 1 до 5")
+
+  Сообщения — на русском языке (эргономическое требование П-4).
+
+  Глобальный обработчик ошибок: @RestControllerAdvice с @ExceptionHandler
+  для MethodArgumentNotValidException, EntityNotFoundException и пр.
+
+6.3 CORS:
+  @Bean
+  CorsConfigurationSource corsConfigurationSource() {
+    CorsConfiguration config = new CorsConfiguration();
+    config.setAllowedOrigins(List.of(
+      "http://localhost:5173",   // Vite dev server
+      "http://localhost:3000"    // Production (nginx)
+    ));
+    config.setAllowedMethods(List.of("GET","POST","PUT","DELETE","OPTIONS"));
+    config.setAllowedHeaders(List.of("*"));
+    config.setAllowCredentials(true);
+    ...
+  }
+
+6.4 Рекомендательный модуль (расширяемый):
+  Интерфейс:
+    public interface RecommendationStrategy {
+      List<BookRecommendation> recommend(UUID userId, int limit);
+    }
+
+  Реализация MVP:
+    SimpleRecommendationStrategy implements RecommendationStrategy
+      — Топ книг по оценкам + случайные из непрочитанных
+
+  Расширение:
+    CollaborativeRecommendationStrategy implements RecommendationStrategy
+      — Коллаборативная фильтрация через user_activity
+
+  Будущее:
+    MLRecommendationStrategy implements RecommendationStrategy
+      — Вызов внешнего ML-сервиса
+
+  Выбор стратегии через @Primary или конфигурацию.
+
+6.5 Обработка ошибок:
+  @RestControllerAdvice GlobalExceptionHandler:
+    – EntityNotFoundException → 404
+    – AccessDeniedException → 403
+    – DuplicateEntityException → 409
+    – MethodArgumentNotValidException → 400 (с деталями полей)
+    – AuthenticationException → 401
+    – Общий Exception → 500
+
+  Формат ошибки:
+    {
+      "timestamp": "...",
+      "status": 400,
+      "error": "Bad Request",
+      "message": "...",
+      "path": "...",
+      "details": { "field": "text", "message": "..." }
+    }
+
+6.6 Flyway миграции:
+  Расположение: backend/src/main/resources/db/migration/
+  Файлы:
+    V1__Initial_schema.sql           — Основные таблицы
+    V2__Add_search_vector.sql        — Полнотекстовый поиск (триггеры)
+    V3__Add_subject_collections.sql  — Предметные подборки
+    V4__Seed_initial_data.sql        — Начальные данные (книги, модератор)
+
+6.7 Jackson маппинг (camelCase):
+  В application.properties:
+    spring.jackson.property-naming-strategy=LOWER_CAMEL_CASE
+    spring.jackson.serialization.write-dates-as-timestamps=false
+    spring.jackson.date-format=yyyy-MM-dd'T'HH:mm:ss'Z'
+
+  В сущностях JPA:
+    @Column(name = "image_url")
+    private String imageUrl;        → JSON: "imageUrl"
+
+    @Column(name = "full_description")
+    private String fullDescription; → JSON: "fullDescription"
+
+================================================================================
+7. ПОСЛЕДОВАТЕЛЬНОСТЬ РЕАЛИЗАЦИИ (MVP → расширения)
+================================================================================
+
+Этап 0 — Инфраструктура
+────────────────────────────────
+  □ Настроить pom.xml (зависимости: Spring Boot, Security, JPA,
+    PostgreSQL, Flyway, Lombok, jjwt, validation)
+  □ Настроить application.properties
+  □ Настроить Docker Compose (PostgreSQL)
+  □ Создать пакетную структуру:
+      com.bookshelf
+        ├── config/       (SecurityConfig, CorsConfig, JwtConfig)
+        ├── controller/
+        ├── dto/
+        ├── entity/
+        ├── exception/
+        ├── repository/
+        ├── security/     (JwtTokenProvider, JwtFilter, UserDetailsImpl)
+        ├── service/
+        └── util/
+  □ Написать V1__Initial_schema.sql (все таблицы)
+
+Этап 1 — Аутентификация и пользователи
+───────────────────────────────────────────────
+  □ Entity: User
+  □ Repository: UserRepository
+  □ DTO: RegisterRequestDTO, LoginRequestDTO, AuthResponseDTO,
+         UserProfileDTO, UpdateProfileDTO, ChangePasswordDTO
+  □ Service: UserService (register, login, getProfile, updateProfile)
+  □ Security: JwtTokenProvider, JwtAuthenticationFilter, SecurityConfig
+  □ Controller: AuthController, UserController
+  □ Тесты: регистрация, логин, профиль
+
+Этап 2 — Книги и поиск
+──────────────────────────────────
+  □ Entity: Book
+  □ Repository: BookRepository (с полнотекстовым поиском)
+  □ DTO: BookDTO, BookDetailDTO, CreateBookDTO
+  □ Service: BookService
+  □ Controller: BookController
+  □ Flyway: V2__Add_search_vector.sql (триггер для tsvector)
+  □ Flyway: V4__Seed_initial_data.sql (заполнить каталог книгами из фронтенда)
+  □ Тесты: CRUD, поиск
+
+Этап 3 — Рецензии и комментарии
+──────────────────────────────────────────
+  □ Entity: Review, Comment
+  □ Repository: ReviewRepository, CommentRepository
+  □ DTO: CreateReviewDTO, ReviewDTO, ReviewWithCommentsDTO,
+         UserReviewDTO, PendingReviewDTO, CommentDTO
+  □ Service: ReviewService, CommentService
+  □ Controller: ReviewController, CommentController
+  □ Тесты: создание, модерация, удаление, комментарии
+
+Этап 4 — Подборки
+──────────────────────────────
+  □ Entity: Collection, CollectionBook
+  □ Repository: CollectionRepository
+  □ DTO: CollectionDTO, CreateCollectionDTO, PendingCollectionDTO
+  □ Service: CollectionService
+  □ Controller: CollectionController
+  □ Тесты: CRUD, модерация, drag-and-drop порядок
+
+Этап 5 — Предметные подборки
+────────────────────────────────────────
+  □ Entity: SubjectCollection, SubjectCollectionBook
+  □ Repository: SubjectCollectionRepository
+  □ DTO: SubjectCollectionDTO, CreateSubjectCollectionDTO
+  □ Service: SubjectCollectionService
+  □ Controller: SubjectCollectionController
+  □ Тесты: создание, модерация
+
+Этап 6 — Мероприятия
+──────────────────────────────
+  □ Entity: Event, EventParticipant
+  □ Repository: EventRepository, EventParticipantRepository
+  □ DTO: EventDTO, CreateEventDTO
+  □ Service: EventService
+  □ Controller: EventController
+  □ Тесты: CRUD, регистрация участников
+
+Этап 7 — Заказы и бронирование
+──────────────────────────────────────────
+  □ Entity: Order
+  □ Repository: OrderRepository
+  □ Service: OrderService (включая формирование URL библиотеки БГУИР)
+  □ Controller: OrderController
+  □ Тесты: добавление/удаление, URL библиотеки
+
+Этап 8 — Рекомендации
+────────────────────────────────
+  □ Entity: UserActivity, UserPreference
+  □ Repository: UserActivityRepository, UserPreferenceRepository
+  □ Service: RecommendationService
+    – SimpleRecommendationStrategy (MVP)
+    – getSimilarBooks
+  □ Controller: RecommendationController, UserPreferenceController
+  □ Тесты: персональные, похожие книги
+
+Этап 9 — Админ-панель
+─────────────────────────────────
+  □ Service: AdminDashboardService
+  □ Controller: AdminController
+  □ Тесты: статистика
+
+Этап 10 — Интеграция с фронтендом
+──────────────────────────────────────────
+  □ Подключить Axios на фронтенде ко всем эндпоинтам
+  □ Заменить localStorage-mock данные на API-вызовы
+  □ Настроить interceptor для JWT-токена в Axios
+  □ Проверить все сценарии end-to-end
+
+Этап 11 — Доработки и расширения (по необходимости)
+───────────────────────────────────────────────────
+  □ Коллаборативная фильтрация рекомендаций
+  □ Загрузка файлов (аватары, обложки)
+  □ Уведомления (WebSocket или polling)
+  □ Расширенная валидация (запрещённые слова в комментариях)
+  □ Логирование действий модератора
+  □ API rate limiting
+  □ Swagger/OpenAPI документация
+
+================================================================================
+ПРИЛОЖЕНИЕ: СООТВЕТСТВИЕ ВАРИАНТОВ ИСПОЛЬЗОВАНИЯ → ЭНДПОИНТЫ
+================================================================================
+
+  Вариант использования (из drawio)          | Эндпоинт(ы)
+  -------------------------------------------|----------------------------------------
+  Регистрация в системе                      | POST /api/auth/register
+  Ввод данных пользователя в форму           | (часть register/login)
+  Авторизация в системе                      | POST /api/auth/login
+  Просмотр информации о книге                | GET /api/books/{id}
+  Поиск книги                                | GET /api/books/search?query=
+  Забронировать книгу через Библиотеку БГУИР | GET /api/orders/library-url/{bookId}
+                                             | POST /api/orders
+  Просмотр рецензий на книгу                 | GET /api/books/{bookId}/reviews
+  Написать комментарий на рецензию           | POST /api/reviews/{reviewId}/comments
+  Управление рецензиями (пользователь)       | POST/PUT/DELETE /api/reviews
+  Написать рецензию                          | POST /api/reviews
+  Отредактировать рецензию                   | PUT /api/reviews/{id}
+  Удалить рецензию                           | DELETE /api/reviews/{id}
+  Управление подборками пользователя         | POST/PUT/DELETE /api/collections
+  Создание подборки                          | POST /api/collections
+  Редактирование подборки                    | PUT /api/collections/{id}
+  Удаление подборки                          | DELETE /api/collections/{id}
+  Поиск подборок по ключевым словам          | GET /api/collections?query=
+  Управление личным профилем пользователя    | GET/PUT /api/users/profile
+  Изменение данных пользователя              | PUT /api/users/profile
+  Изменение фото профиля                     | PUT /api/users/profile/avatar
+  Просмотр рекомендаций книг от ИИ           | GET /api/recommendations/personal
+  Просмотр анонсов мероприятий               | GET /api/events
+  Подтвердить участие в мероприятии          | POST /api/events/{id}/register
+  Управление рецензиями (модератор)          | GET /api/reviews/pending
+                                             | PUT /api/reviews/{id}/approve
+                                             | PUT /api/reviews/{id}/reject
+  Публикация одобренных рецензий             | PUT /api/reviews/{id}/approve
+  Отклонение публикации рецензии             | PUT /api/reviews/{id}/reject
+  Управление подборками (модератор)          | GET /api/collections/pending
+                                             | PUT /api/collections/{id}/approve
+                                             | PUT /api/collections/{id}/reject
+  Публикация одобренных подборок             | PUT /api/collections/{id}/approve
+  Отклонение публикации подборок             | PUT /api/collections/{id}/reject
+  Управление мероприятиями                   | POST/PUT/DELETE /api/events
+  Создание мероприятия                       | POST /api/events
+  Редактирование мероприятия                 | PUT /api/events/{id}
+
+================================================================================
+КОНЕЦ ДОКУМЕНТА
+================================================================================

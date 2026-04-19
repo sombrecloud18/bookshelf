@@ -1,0 +1,83 @@
+version: '3.9'
+
+services:
+  # PostgreSQL Database
+  db:
+    build:
+      context: .
+      dockerfile: Dockerfile.db
+    container_name: bookshelf-db
+    environment:
+      POSTGRES_DB: ${DB_NAME:-bookshelf}
+      POSTGRES_USER: ${DB_USER:-bookshelf_user}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-bookshelf_password}
+    ports:
+      - "5455:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - bookshelf-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-bookshelf_user} -d ${DB_NAME:-bookshelf}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Spring Boot Backend
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    container_name: bookshelf-backend
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DB_URL: jdbc:postgresql://db:5432/${DB_NAME:-bookshelf}
+      DB_USER: ${DB_USER:-bookshelf_user}
+      DB_PASSWORD: ${DB_PASSWORD:-bookshelf_password}
+      JWT_SECRET: ${JWT_SECRET:-bookshelf-super-secret-key-for-jwt-token-generation-2024}
+      JWT_EXPIRATION: ${JWT_EXPIRATION:-86400000}
+      CORS_ORIGINS: http://localhost:3000,http://localhost:5173
+      JAVA_OPTS: "-Xmx512m -Xms256m"
+    ports:
+      - "8088:8088"
+    networks:
+      - bookshelf-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://localhost:8088/api/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  # Vue.js Frontend
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+    container_name: bookshelf-frontend
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      - "3000:3000"
+    networks:
+      - bookshelf-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:3000 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+networks:
+  bookshelf-network:
+    driver: bridge
+
+volumes:
+  postgres_data:
+    driver: local
