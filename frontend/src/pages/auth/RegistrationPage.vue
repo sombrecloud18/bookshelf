@@ -4,6 +4,7 @@ import { useRouter } from 'vue-router';
 import Select from '../AccountPage/components/Select.vue';
 import { faculties, courses, specialtiesData } from '../../constants/studyData.js';
 import AppHeader from '../../layouts/components/AppHeader.vue';
+import { api } from '../../api.js';
 
 const AUTH_TOKEN_KEY = 'bookshelf_auth_token';
 const AUTH_ROLE_KEY = 'bookshelf_auth_role';
@@ -13,6 +14,7 @@ const loading = ref(false);
 const error = ref(null);
 
 const form = reactive({
+  login: '',
   lastName: '',
   firstName: '',
   patronymic: '',
@@ -36,6 +38,10 @@ function onFacultyChange() {
 
 async function submit() {
   error.value = null;
+  if (!form.login.trim()) {
+    error.value = 'Введите логин.';
+    return;
+  }
   if (!form.lastName.trim() || !form.firstName.trim() || !form.faculty || !form.specialty || !form.course) {
     error.value = 'Заполните обязательные поля (ФИО и учебные данные).';
     return;
@@ -44,26 +50,36 @@ async function submit() {
     error.value = 'Укажите почту и пароль.';
     return;
   }
+  if (form.password.length < 6) {
+    error.value = 'Пароль должен содержать не менее 6 символов.';
+    return;
+  }
 
   loading.value = true;
-  await new Promise(r => setTimeout(r, 350));
-  loading.value = false;
-
-  // Пока без API: сохраняем профиль локально + ставим токен
-  localStorage.setItem(AUTH_TOKEN_KEY, `token_${Date.now()}`);
-  localStorage.setItem(AUTH_ROLE_KEY, 'user');
-  localStorage.setItem(
-    'bookshelf_profile',
-    JSON.stringify({
-      fullName: [form.lastName, form.firstName, form.patronymic].filter(Boolean).join(' '),
-      studyInfo: [form.faculty, form.specialty, form.course].filter(Boolean).join(', '),
-      phoneNumber: form.phoneNumber,
-      email: form.email,
-      avatarUrl: form.avatarUrl,
-    }),
-  );
-
-  router.push('/');
+  try {
+    const data = await api.post('/auth/register', {
+      login: form.login.trim(),
+      email: form.email.trim(),
+      password: form.password,
+      firstName: form.firstName.trim(),
+      lastName: form.lastName.trim(),
+      patronymic: form.patronymic.trim() || null,
+      faculty: form.faculty || null,
+      specialty: form.specialty || null,
+      course: form.course || null,
+      phoneNumber: form.phoneNumber.trim() || null,
+      avatarUrl: form.avatarUrl.trim() || null,
+    });
+    localStorage.setItem(AUTH_TOKEN_KEY, data.token);
+    localStorage.setItem(AUTH_ROLE_KEY, data.role);
+    localStorage.setItem('bookshelf_auth_login', data.user.login);
+    localStorage.setItem('bookshelf_profile', JSON.stringify(data.user));
+    router.push('/');
+  } catch (e) {
+    error.value = e.message || 'Ошибка регистрации';
+  } finally {
+    loading.value = false;
+  }
 }
 </script>
 
@@ -146,6 +162,17 @@ async function submit() {
                 <Select v-model="form.course" label="Курс" name="course" :items="courses" placeholder="Выберите курс" />
               </div>
 
+              <UFormField label="Логин" name="login">
+                <UInput
+                  v-model="form.login"
+                  highlight
+                  variant="outline"
+                  class="w-full"
+                  placeholder="Например: ivanov_ivan"
+                  size="xl"
+                />
+              </UFormField>
+
               <UFormField label="Почта" name="email">
                 <UInput
                   v-model="form.email"
@@ -164,7 +191,7 @@ async function submit() {
                   highlight
                   variant="outline"
                   class="w-full"
-                  placeholder="Password"
+                  placeholder="Минимум 6 символов"
                   size="xl"
                 />
               </UFormField>

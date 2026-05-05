@@ -5,6 +5,7 @@ import com.bookshelf.dto.collection.SubjectCollectionDTO;
 import com.bookshelf.service.SubjectCollectionService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PageableDefault;
@@ -22,6 +23,7 @@ import java.util.UUID;
 @RestController
 @RequestMapping("/api/subject-collections")
 @RequiredArgsConstructor
+@Slf4j
 public class SubjectCollectionController {
 
     private final SubjectCollectionService subjectCollectionService;
@@ -30,7 +32,10 @@ public class SubjectCollectionController {
     public ResponseEntity<SubjectCollectionDTO> createCollection(
             @AuthenticationPrincipal UUID userId,
             @Valid @RequestBody CreateSubjectCollectionDTO dto) {
-        return ResponseEntity.ok(subjectCollectionService.createSubjectCollection(userId, dto));
+        log.info("Создание учебной подборки: userId={}, subject='{}'", userId, dto.getSubject());
+        SubjectCollectionDTO result = subjectCollectionService.createSubjectCollection(userId, dto);
+        log.info("Учебная подборка создана: id={}, userId={}", result.getId(), userId);
+        return ResponseEntity.ok(result);
     }
 
     @PutMapping("/{id}")
@@ -38,7 +43,10 @@ public class SubjectCollectionController {
             @AuthenticationPrincipal UUID userId,
             @PathVariable UUID id,
             @Valid @RequestBody CreateSubjectCollectionDTO dto) {
-        return ResponseEntity.ok(subjectCollectionService.updateSubjectCollection(userId, id, dto));
+        log.info("Обновление учебной подборки: id={}, userId={}", id, userId);
+        SubjectCollectionDTO result = subjectCollectionService.updateSubjectCollection(userId, id, dto);
+        log.info("Учебная подборка обновлена: id={}", id);
+        return ResponseEntity.ok(result);
     }
 
     @DeleteMapping("/{id}")
@@ -46,6 +54,7 @@ public class SubjectCollectionController {
             @AuthenticationPrincipal UUID userId,
             @PathVariable UUID id) {
         boolean isModerator = isModerator();
+        log.info("Удаление учебной подборки: id={}, userId={}, isModerator={}", id, userId, isModerator);
         subjectCollectionService.deleteSubjectCollection(userId, id, isModerator);
         return ResponseEntity.noContent().build();
     }
@@ -55,17 +64,20 @@ public class SubjectCollectionController {
             @RequestParam(required = false) String subject,
             @RequestParam(required = false) String specialty,
             @PageableDefault(size = 12) Pageable pageable) {
+        log.debug("Учебные подборки: subject='{}', specialty='{}', page={}", subject, specialty, pageable.getPageNumber());
         return ResponseEntity.ok(subjectCollectionService.getApprovedCollections(subject, specialty, pageable));
     }
 
     @GetMapping("/my")
     public ResponseEntity<List<SubjectCollectionDTO>> getMyCollections(@AuthenticationPrincipal UUID userId) {
+        log.debug("Мои учебные подборки: userId={}", userId);
         return ResponseEntity.ok(subjectCollectionService.getUserCollections(userId));
     }
 
     @GetMapping("/pending")
     @PreAuthorize("hasRole('MODERATOR')")
     public ResponseEntity<Page<SubjectCollectionDTO>> getPendingCollections(@PageableDefault(size = 20) Pageable pageable) {
+        log.debug("Учебные подборки на модерации: page={}", pageable.getPageNumber());
         return ResponseEntity.ok(subjectCollectionService.getPendingCollections(pageable));
     }
 
@@ -75,6 +87,7 @@ public class SubjectCollectionController {
             @PathVariable UUID id,
             @RequestBody(required = false) Map<String, String> body) {
         String comment = body != null ? body.get("moderatorComment") : null;
+        log.info("Одобрение учебной подборки: id={}, comment='{}'", id, comment);
         return ResponseEntity.ok(subjectCollectionService.approveCollection(id, comment));
     }
 
@@ -84,6 +97,7 @@ public class SubjectCollectionController {
             @PathVariable UUID id,
             @RequestBody(required = false) Map<String, String> body) {
         String comment = body != null ? body.get("moderatorComment") : null;
+        log.info("Отклонение учебной подборки: id={}, comment='{}'", id, comment);
         return ResponseEntity.ok(subjectCollectionService.rejectCollection(id, comment));
     }
 

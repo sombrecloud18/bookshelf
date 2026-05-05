@@ -17,12 +17,12 @@ public class CollectionBook {
     @EmbeddedId
     private CollectionBookId id;
 
-    @ManyToOne(fetch = FetchType.LAZY)
+    @ManyToOne(fetch = FetchType.EAGER)
     @MapsId("collectionId")
     @JoinColumn(name = "collection_id")
     private Collection collection;
 
-    @ManyToOne(fetch = FetchType.LAZY)
+    @ManyToOne(fetch = FetchType.EAGER)
     @MapsId("bookId")
     @JoinColumn(name = "book_id")
     private Book book;

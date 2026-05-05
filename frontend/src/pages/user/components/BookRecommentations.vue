@@ -2,6 +2,7 @@
 <script setup>
 import { ref, onMounted } from 'vue';
 import Card from '../../../components/Card.vue';
+import { api } from '../../../api.js';
 
 const props = defineProps({
   bookId: { type: String, required: true },
@@ -13,12 +14,11 @@ const loading = ref(true);
 async function fetchSimilarBooks() {
   try {
     loading.value = true;
-    // API запрос к бэкенду
-    const response = await fetch(`/api/recommendations/similar/${props.bookId}`);
-    const data = await response.json();
-    similarBooks.value = data.similar;
+    const data = await api.get(`/recommendations/similar/${props.bookId}`);
+    similarBooks.value = data || [];
   } catch (error) {
     console.error('Ошибка загрузки похожих книг:', error);
+    similarBooks.value = [];
   } finally {
     loading.value = false;
   }

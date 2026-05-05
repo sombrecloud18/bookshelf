@@ -6,6 +6,7 @@ import com.bookshelf.entity.*;
 import com.bookshelf.exception.AppException;
 import com.bookshelf.repository.*;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -18,6 +19,7 @@ import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class CollectionService {
 
     private final CollectionRepository collectionRepository;
@@ -39,7 +41,9 @@ public class CollectionService {
 
         collection = collectionRepository.save(collection);
         attachBooks(collection, dto.getBookIds());
-        return toDTO(collectionRepository.save(collection));
+        CollectionDTO result = toDTO(collectionRepository.save(collection));
+        log.info("Подборка создана: id={}, userId={}, title='{}'", result.getId(), userId, result.getTitle());
+        return result;
     }
 
     @Transactional
@@ -80,14 +84,18 @@ public class CollectionService {
         }
 
         collection.setStatus("PENDING");
-        return toDTO(collectionRepository.save(collection));
+        CollectionDTO result = toDTO(collectionRepository.save(collection));
+        log.info("Подборка отправлена на модерацию: id={}, userId={}", collectionId, userId);
+        return result;
     }
 
+    @Transactional(readOnly = true)
     public List<CollectionDTO> getUserCollections(UUID userId) {
         return collectionRepository.findByUserId(userId)
                 .stream().map(this::toDTO).collect(Collectors.toList());
     }
 
+    @Transactional(readOnly = true)
     public Page<CollectionDTO> getApprovedCollections(String query, Pageable pageable) {
         if (query != null && !query.isBlank()) {
             return collectionRepository.searchByKeyword(query, pageable).map(this::toDTO);
@@ -95,6 +103,7 @@ public class CollectionService {
         return collectionRepository.findByStatus("APPROVED", pageable).map(this::toDTO);
     }
 
+    @Transactional(readOnly = true)
     public Page<CollectionDTO> getPendingCollections(Pageable pageable) {
         return collectionRepository.findByStatus("PENDING", pageable).map(this::toDTO);
     }

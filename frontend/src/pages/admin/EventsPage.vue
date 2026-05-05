@@ -1,30 +1,9 @@
 <script setup>
-import { ref } from 'vue';
+import { ref, onMounted } from 'vue';
+import { api } from '../../api.js';
 
-const events = ref([
-  {
-    id: 'e-1',
-    date: '2026-04-20',
-    title: 'Встреча книжного клуба',
-    description: 'Обсуждаем классику и делимся впечатлениями.',
-    location: 'Библиотека №1, ул. Центральная 15',
-    time: '18:00',
-    maxParticipants: 20,
-    currentParticipants: 8,
-    organizer: 'Анна Смирнова',
-  },
-  {
-    id: 'e-2',
-    date: '2026-04-25',
-    title: 'Лекция "Современная литература"',
-    description: 'Лекция о современных тенденциях в литературе и новых именах.',
-    location: 'Онлайн (Zoom)',
-    time: '19:00',
-    maxParticipants: 50,
-    currentParticipants: 23,
-    organizer: 'Михаил Петров',
-  },
-]);
+const events = ref([]);
+const loading = ref(true);
 
 const form = ref({
   date: '',
@@ -38,6 +17,18 @@ const form = ref({
 const selectedEvent = ref(null);
 const showDetailsModal = ref(false);
 const showEditModal = ref(false);
+const saving = ref(false);
+
+onMounted(async () => {
+  try {
+    const data = await api.get('/events?size=50');
+    events.value = data.content || [];
+  } catch (e) {
+    console.error('Ошибка загрузки мероприятий:', e);
+  } finally {
+    loading.value = false;
+  }
+});
 
 function viewDetails(event) {
   selectedEvent.value = { ...event };
@@ -49,37 +40,57 @@ function openEdit(event) {
   showEditModal.value = true;
 }
 
-function saveEdit() {
-  if (!selectedEvent.value) return;
-  if (!selectedEvent.value.title.trim()) return;
-
-  const index = events.value.findIndex(e => e.id === selectedEvent.value.id);
-  if (index !== -1) {
-    events.value[index] = { ...selectedEvent.value };
+async function saveEdit() {
+  if (!selectedEvent.value?.title?.trim()) return;
+  saving.value = true;
+  try {
+    const updated = await api.put(`/events/${selectedEvent.value.id}`, {
+      title: selectedEvent.value.title.trim(),
+      description: selectedEvent.value.description || '',
+      date: selectedEvent.value.date,
+      time: selectedEvent.value.time || '',
+      location: selectedEvent.value.location || '',
+      maxParticipants: selectedEvent.value.maxParticipants ? Number(selectedEvent.value.maxParticipants) : null,
+    });
+    const idx = events.value.findIndex(e => e.id === updated.id);
+    if (idx !== -1) events.value[idx] = updated;
+    showEditModal.value = false;
+  } catch (e) {
+    console.error('Ошибка сохранения:', e);
+  } finally {
+    saving.value = false;
   }
-  showEditModal.value = false;
 }
 
-function addEvent() {
+async function addEvent() {
   if (!form.value.date || !form.value.title.trim()) return;
-  events.value.unshift({
-    id: `e-${Math.random().toString(36).slice(2, 9)}`,
-    date: form.value.date,
-    title: form.value.title.trim(),
-    description: form.value.description.trim(),
-    location: form.value.location.trim() || 'Не указано',
-    time: form.value.time.trim() || 'Не указано',
-    maxParticipants: form.value.maxParticipants ? Number(form.value.maxParticipants) : null,
-    currentParticipants: 0,
-    organizer: 'Администратор',
-  });
-  form.value = { date: '', title: '', description: '', location: '', time: '', maxParticipants: '' };
+  saving.value = true;
+  try {
+    const created = await api.post('/events', {
+      title: form.value.title.trim(),
+      description: form.value.description.trim() || '',
+      date: form.value.date,
+      time: form.value.time.trim() || '',
+      location: form.value.location.trim() || '',
+      maxParticipants: form.value.maxParticipants ? Number(form.value.maxParticipants) : null,
+    });
+    events.value.unshift(created);
+    form.value = { date: '', title: '', description: '', location: '', time: '', maxParticipants: '' };
+  } catch (e) {
+    console.error('Ошибка создания:', e);
+  } finally {
+    saving.value = false;
+  }
 }
 
-function removeEvent(id) {
+async function removeEvent(id) {
   const event = events.value.find(e => e.id === id);
-  if (confirm(`Удалить мероприятие «${event?.title}»?`)) {
+  if (!confirm(`Удалить мероприятие «${event?.title}»?`)) return;
+  try {
+    await api.delete(`/events/${id}`);
     events.value = events.value.filter(e => e.id !== id);
+  } catch (e) {
+    console.error('Ошибка удаления:', e);
   }
 }
 </script>
@@ -115,11 +126,15 @@ function removeEvent(id) {
           </UFormField>
         </div>
         <div class="mt-4 flex justify-end">
-          <UButton color="primary" class="rounded-xl" @click="addEvent">Добавить мероприятие</UButton>
+          <UButton :loading="saving" color="primary" class="rounded-xl" @click="addEvent">Добавить мероприятие</UButton>
         </div>
       </UCard>
 
-      <div class="mt-6 grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div v-if="loading" class="flex justify-center py-12">
+        <div class="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-500"></div>
+      </div>
+
+      <div v-else class="mt-6 grid grid-cols-1 md:grid-cols-2 gap-6">
         <UCard
           v-for="e in events"
           :key="e.id"
@@ -153,7 +168,7 @@ function removeEvent(id) {
       </div>
 
       <!-- Модальное окно просмотра мероприятия -->
-      <UModal v-model="showDetailsModal" class="z-100">
+      <UModal v-model:open="showDetailsModal" class="z-100">
         <template #body>
           <div v-if="selectedEvent" class="space-y-4">
             <div class="bg-white rounded-2xl border border-gray-200 p-5">
@@ -183,7 +198,7 @@ function removeEvent(id) {
       </UModal>
 
       <!-- Модальное окно редактирования мероприятия -->
-      <UModal v-model="showEditModal" class="z-100">
+      <UModal v-model:open="showEditModal" class="z-100">
         <template #body>
           <div v-if="selectedEvent" class="space-y-4">
             <h2 class="text-xl font-bold text-black mb-4">Редактировать мероприятие</h2>
@@ -212,7 +227,7 @@ function removeEvent(id) {
         <template #footer>
           <div class="flex justify-end gap-3 w-full">
             <UButton variant="outline" @click="showEditModal = false">Отмена</UButton>
-            <UButton color="primary" @click="saveEdit">Сохранить</UButton>
+            <UButton :loading="saving" color="primary" @click="saveEdit">Сохранить</UButton>
           </div>
         </template>
       </UModal>

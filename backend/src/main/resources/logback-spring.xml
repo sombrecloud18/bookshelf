@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+
+    <property name="LOG_PATTERN"
+              value="%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{40} - %msg%n"/>
+
+    <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>${LOG_PATTERN}</pattern>
+            <charset>UTF-8</charset>
+        </encoder>
+    </appender>
+
+    <!-- HTTP-уровень: каждый запрос/ответ -->
+    <logger name="com.bookshelf.config.RequestLoggingFilter" level="INFO" additivity="false">
+        <appender-ref ref="CONSOLE"/>
+    </logger>
+
+    <!-- Контроллеры -->
+    <logger name="com.bookshelf.controller" level="DEBUG" additivity="false">
+        <appender-ref ref="CONSOLE"/>
+    </logger>
+
+    <!-- Сервисы (бизнес-логика) -->
+    <logger name="com.bookshelf.service" level="DEBUG" additivity="false">
+        <appender-ref ref="CONSOLE"/>
+    </logger>
+
+    <!-- Безопасность: JWT и фильтры -->
+    <logger name="com.bookshelf.security" level="DEBUG" additivity="false">
+        <appender-ref ref="CONSOLE"/>
+    </logger>
+
+    <!-- Обработчик исключений -->
+    <logger name="com.bookshelf.exception" level="DEBUG" additivity="false">
+        <appender-ref ref="CONSOLE"/>
+    </logger>
+
+    <!-- Spring Security — только WARN, чтобы не шумело -->
+    <logger name="org.springframework.security" level="WARN"/>
+
+    <!-- Spring Web — DEBUG для диагностики маршрутизации -->
+    <logger name="org.springframework.web" level="INFO"/>
+
+    <!-- Hibernate SQL — логируем каждый запрос к БД -->
+    <logger name="org.hibernate.SQL" level="DEBUG" additivity="false">
+        <appender-ref ref="CONSOLE"/>
+    </logger>
+
+    <!-- Параметры Hibernate-запросов -->
+    <logger name="org.hibernate.orm.jdbc.bind" level="TRACE" additivity="false">
+        <appender-ref ref="CONSOLE"/>
+    </logger>
+
+    <!-- HikariCP — пул соединений -->
+    <logger name="com.zaxxer.hikari" level="INFO"/>
+
+    <!-- Flyway миграции -->
+    <logger name="org.flywaydb" level="INFO"/>
+
+    <root level="INFO">
+        <appender-ref ref="CONSOLE"/>
+    </root>
+
+</configuration>

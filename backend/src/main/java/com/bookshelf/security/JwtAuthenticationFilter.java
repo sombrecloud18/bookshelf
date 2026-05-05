@@ -5,6 +5,7 @@ import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -18,6 +19,7 @@ import java.util.UUID;
 
 @Component
 @RequiredArgsConstructor
+@Slf4j
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     private final JwtTokenProvider tokenProvider;
@@ -28,13 +30,20 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                                     FilterChain filterChain) throws ServletException, IOException {
         String token = extractToken(request);
 
-        if (token != null && tokenProvider.validateToken(token)) {
-            UUID userId = tokenProvider.getUserIdFromToken(token);
-            String role = tokenProvider.getRoleFromToken(token);
+        if (token != null) {
+            if (tokenProvider.validateToken(token)) {
+                UUID userId = tokenProvider.getUserIdFromToken(token);
+                String role = tokenProvider.getRoleFromToken(token);
 
-            var authority = new SimpleGrantedAuthority("ROLE_" + role);
-            var auth = new UsernamePasswordAuthenticationToken(userId, null, List.of(authority));
-            SecurityContextHolder.getContext().setAuthentication(auth);
+                var authority = new SimpleGrantedAuthority("ROLE_" + role);
+                var auth = new UsernamePasswordAuthenticationToken(userId, null, List.of(authority));
+                SecurityContextHolder.getContext().setAuthentication(auth);
+                log.debug("JWT аутентификация: userId={}, role={}, uri={}", userId, role, request.getRequestURI());
+            } else {
+                log.warn("JWT отклонён: uri={}", request.getRequestURI());
+            }
+        } else {
+            log.trace("Запрос без JWT: {} {}", request.getMethod(), request.getRequestURI());
         }
 
         filterChain.doFilter(request, response);

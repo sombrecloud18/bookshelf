@@ -6,6 +6,7 @@ import com.bookshelf.entity.*;
 import com.bookshelf.exception.AppException;
 import com.bookshelf.repository.*;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -17,6 +18,7 @@ import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class SubjectCollectionService {
 
     private final SubjectCollectionRepository subjectCollectionRepository;
@@ -77,6 +79,7 @@ public class SubjectCollectionService {
         subjectCollectionRepository.delete(sc);
     }
 
+    @Transactional(readOnly = true)
     public Page<SubjectCollectionDTO> getApprovedCollections(String subject, String specialty, Pageable pageable) {
         if (subject != null && specialty != null) {
             return subjectCollectionRepository
@@ -86,10 +89,12 @@ public class SubjectCollectionService {
         return subjectCollectionRepository.findByStatus("APPROVED", pageable).map(this::toDTO);
     }
 
+    @Transactional(readOnly = true)
     public Page<SubjectCollectionDTO> getPendingCollections(Pageable pageable) {
         return subjectCollectionRepository.findByStatus("PENDING", pageable).map(this::toDTO);
     }
 
+    @Transactional(readOnly = true)
     public List<SubjectCollectionDTO> getUserCollections(UUID userId) {
         return subjectCollectionRepository.findByUserId(userId)
                 .stream().map(this::toDTO).collect(Collectors.toList());

@@ -22,7 +22,7 @@ public class SubjectCollection {
     @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
 
-    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @ManyToOne(fetch = FetchType.EAGER, optional = false)
     @JoinColumn(name = "user_id", nullable = false)
     private User user;
 
@@ -50,7 +50,7 @@ public class SubjectCollection {
     @Column(name = "moderator_comment", columnDefinition = "TEXT")
     private String moderatorComment;
 
-    @OneToMany(mappedBy = "subjectCollection", cascade = CascadeType.ALL, orphanRemoval = true)
+    @OneToMany(mappedBy = "subjectCollection", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.EAGER)
     @OrderBy("position ASC")
     @Builder.Default
     private List<SubjectCollectionBook> subjectCollectionBooks = new ArrayList<>();

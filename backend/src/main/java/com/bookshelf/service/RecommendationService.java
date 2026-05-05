@@ -9,6 +9,7 @@ import com.bookshelf.entity.UserPreference;
 import com.bookshelf.exception.AppException;
 import com.bookshelf.repository.*;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
@@ -23,6 +24,7 @@ import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class RecommendationService {
 
     private final BookRepository bookRepository;
@@ -31,8 +33,9 @@ public class RecommendationService {
     private final UserRepository userRepository;
     private final ReviewRepository reviewRepository;
 
+    @Transactional(readOnly = true)
     public RecommendationResponseDTO getPersonalRecommendations(UUID userId) {
-        // Popular books (top rated)
+        log.debug("Формирование рекомендаций: userId={}", userId);
         List<RecommendationItemDTO> popular = bookRepository
                 .findTopRatedBooks(10)
                 .stream()
@@ -74,6 +77,7 @@ public class RecommendationService {
                 .build();
     }
 
+    @Transactional(readOnly = true)
     public List<RecommendationItemDTO> getSimilarBooks(UUID bookId) {
         Book book = bookRepository.findById(bookId).orElse(null);
         if (book == null) return List.of();
@@ -109,6 +113,7 @@ public class RecommendationService {
         return toPreferencesDTO(pref);
     }
 
+    @Transactional(readOnly = true)
     public UserPreferencesDTO getPreferences(UUID userId) {
         return userPreferenceRepository.findByUserId(userId)
                 .map(this::toPreferencesDTO)

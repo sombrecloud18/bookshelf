@@ -11,6 +11,7 @@ import com.bookshelf.exception.AppException;
 import com.bookshelf.repository.UserRepository;
 import com.bookshelf.security.JwtTokenProvider;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -21,6 +22,7 @@ import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class UserService {
 
     private final UserRepository userRepository;
@@ -29,10 +31,13 @@ public class UserService {
 
     @Transactional
     public AuthResponseDTO register(RegisterRequestDTO dto) {
+        log.debug("Проверка уникальности login={} и email={}", dto.getLogin(), dto.getEmail());
         if (userRepository.existsByLogin(dto.getLogin())) {
+            log.warn("Регистрация отклонена: логин '{}' уже занят", dto.getLogin());
             throw AppException.conflict("Пользователь с таким логином уже существует");
         }
         if (userRepository.existsByEmail(dto.getEmail())) {
+            log.warn("Регистрация отклонена: email '{}' уже занят", dto.getEmail());
             throw AppException.conflict("Пользователь с таким email уже существует");
         }
 
@@ -52,6 +57,7 @@ public class UserService {
                 .build();
 
         user = userRepository.save(user);
+        log.info("Новый пользователь сохранён в БД: id={}, login={}", user.getId(), user.getLogin());
         String token = jwtTokenProvider.generateToken(user.getId(), user.getRole());
 
         return AuthResponseDTO.builder()
@@ -62,18 +68,25 @@ public class UserService {
     }
 
     public AuthResponseDTO login(LoginRequestDTO dto) {
+        log.debug("Поиск пользователя по логину: '{}'", dto.getLogin());
         User user = userRepository.findByLogin(dto.getLogin())
-                .orElseThrow(() -> AppException.unauthorized("Неверный логин или пароль"));
+                .orElseThrow(() -> {
+                    log.warn("Вход отклонён: логин '{}' не найден", dto.getLogin());
+                    return AppException.unauthorized("Неверный логин или пароль");
+                });
 
         if (user.isBlocked()) {
+            log.warn("Вход отклонён: аккаунт заблокирован, userId={}", user.getId());
             throw AppException.forbidden("Аккаунт заблокирован");
         }
 
         if (!passwordEncoder.matches(dto.getPassword(), user.getPasswordHash())) {
+            log.warn("Вход отклонён: неверный пароль для '{}'", dto.getLogin());
             throw AppException.unauthorized("Неверный логин или пароль");
         }
 
         String token = jwtTokenProvider.generateToken(user.getId(), user.getRole());
+        log.info("Токен выдан: userId={}, role={}", user.getId(), user.getRole());
         return AuthResponseDTO.builder()
                 .token(token)
                 .role(mapRole(user.getRole()))
@@ -81,6 +94,7 @@ public class UserService {
                 .build();
     }
 
+    @Transactional(readOnly = true)
     public UserProfileDTO getProfile(UUID userId) {
         User user = findById(userId);
         return toProfileDTO(user);
@@ -139,6 +153,7 @@ public class UserService {
         userRepository.save(user);
     }
 
+    @Transactional(readOnly = true)
     public Page<UserProfileDTO> getAllUsers(Pageable pageable) {
         return userRepository.findAll(pageable).map(this::toProfileDTO);
     }

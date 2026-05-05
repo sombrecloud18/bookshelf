@@ -42,7 +42,7 @@ public class Event {
     @Column(length = 255)
     private String organizer;
 
-    @ManyToOne(fetch = FetchType.LAZY)
+    @ManyToOne(fetch = FetchType.EAGER)
     @JoinColumn(name = "created_by")
     private User createdBy;
 

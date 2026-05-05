@@ -19,6 +19,12 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(AppException.class)
     public ResponseEntity<Map<String, Object>> handleAppException(AppException ex, HttpServletRequest request) {
+        int status = ex.getStatus().value();
+        if (status >= 500) {
+            log.error("AppException [{}] {} {}: {}", status, request.getMethod(), request.getRequestURI(), ex.getMessage());
+        } else if (status >= 400) {
+            log.warn("AppException [{}] {} {}: {}", status, request.getMethod(), request.getRequestURI(), ex.getMessage());
+        }
         return buildResponse(ex.getStatus(), ex.getMessage(), request.getRequestURI(), null);
     }
 
@@ -30,6 +36,8 @@ public class GlobalExceptionHandler {
         for (FieldError error : ex.getBindingResult().getFieldErrors()) {
             fieldErrors.put(error.getField(), error.getDefaultMessage());
         }
+
+        log.warn("Ошибка валидации [400] {} {}: поля={}", request.getMethod(), request.getRequestURI(), fieldErrors);
 
         Map<String, Object> body = new HashMap<>();
         body.put("timestamp", OffsetDateTime.now().toString());
@@ -44,7 +52,7 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(Exception.class)
     public ResponseEntity<Map<String, Object>> handleGenericException(Exception ex, HttpServletRequest request) {
-        log.error("Unexpected error: {}", ex.getMessage(), ex);
+        log.error("Необработанная ошибка [500] {} {}: {}", request.getMethod(), request.getRequestURI(), ex.getMessage(), ex);
         return buildResponse(HttpStatus.INTERNAL_SERVER_ERROR,
                 "Произошла внутренняя ошибка сервера", request.getRequestURI(), null);
     }

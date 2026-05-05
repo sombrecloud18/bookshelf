@@ -10,6 +10,7 @@ import com.bookshelf.repository.EventParticipantRepository;
 import com.bookshelf.repository.EventRepository;
 import com.bookshelf.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -19,16 +20,19 @@ import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class EventService {
 
     private final EventRepository eventRepository;
     private final EventParticipantRepository eventParticipantRepository;
     private final UserRepository userRepository;
 
+    @Transactional(readOnly = true)
     public Page<EventDTO> getUpcomingEvents(Pageable pageable) {
         return eventRepository.findUpcoming(pageable).map(e -> toDTO(e, 0));
     }
 
+    @Transactional(readOnly = true)
     public EventDTO getEventById(UUID id) {
         Event event = findById(id);
         long count = eventParticipantRepository.countByEventId(id);
@@ -52,6 +56,7 @@ public class EventService {
                 .build();
 
         event = eventRepository.save(event);
+        log.info("Мероприятие создано: id={}, title='{}', date={}", event.getId(), event.getTitle(), event.getDate());
         long count = eventParticipantRepository.countByEventId(event.getId());
         return toDTO(event, count);
     }
@@ -79,10 +84,12 @@ public class EventService {
             throw AppException.notFound("Мероприятие не найдено");
         }
         eventRepository.deleteById(id);
+        log.info("Мероприятие удалено: id={}", id);
     }
 
     @Transactional
     public void registerForEvent(UUID userId, UUID eventId) {
+        log.debug("Регистрация на мероприятие: userId={}, eventId={}", userId, eventId);
         Event event = findById(eventId);
 
         if (eventParticipantRepository.existsByEventIdAndUserId(eventId, userId)) {
@@ -104,6 +111,7 @@ public class EventService {
                 .build();
 
         eventParticipantRepository.save(participant);
+        log.info("Пользователь зарегистрирован на мероприятие: userId={}, eventId={}", userId, eventId);
     }
 
     @Transactional
@@ -112,8 +120,10 @@ public class EventService {
             throw AppException.notFound("Регистрация не найдена");
         }
         eventParticipantRepository.deleteByEventIdAndUserId(eventId, userId);
+        log.info("Пользователь отменил регистрацию: userId={}, eventId={}", userId, eventId);
     }
 
+    @Transactional(readOnly = true)
     public boolean isRegistered(UUID userId, UUID eventId) {
         return eventParticipantRepository.existsByEventIdAndUserId(eventId, userId);
     }

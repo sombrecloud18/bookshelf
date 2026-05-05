@@ -6,6 +6,7 @@ import com.bookshelf.entity.*;
 import com.bookshelf.exception.AppException;
 import com.bookshelf.repository.*;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -15,6 +16,7 @@ import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class CommentService {
 
     private final CommentRepository commentRepository;
@@ -79,11 +81,13 @@ public class CommentService {
         commentRepository.delete(comment);
     }
 
+    @Transactional(readOnly = true)
     public List<CommentDTO> getCommentsForReview(UUID reviewId) {
         return commentRepository.findByReviewIdOrderByCreatedAtAsc(reviewId)
                 .stream().map(this::toDTO).collect(Collectors.toList());
     }
 
+    @Transactional(readOnly = true)
     public List<CommentDTO> getCommentsForCollection(UUID collectionId) {
         return commentRepository.findByCollectionIdOrderByCreatedAtAsc(collectionId)
                 .stream().map(this::toDTO).collect(Collectors.toList());

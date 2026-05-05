@@ -2,7 +2,9 @@ package com.bookshelf.service;
 
 import com.bookshelf.repository.*;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.util.LinkedHashMap;
@@ -10,6 +12,7 @@ import java.util.Map;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class AdminDashboardService {
 
     private final UserRepository userRepository;
@@ -19,7 +22,9 @@ public class AdminDashboardService {
     private final SubjectCollectionRepository subjectCollectionRepository;
     private final EventRepository eventRepository;
 
+    @Transactional(readOnly = true)
     public Map<String, Object> getDashboardStats() {
+        log.debug("Сбор статистики для дашборда");
         Map<String, Object> stats = new LinkedHashMap<>();
 
         stats.put("totalUsers", userRepository.count());

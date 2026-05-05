@@ -1,238 +1,293 @@
 <script setup>
-import { ref, reactive, computed } from 'vue';
+import { ref, reactive, computed, onMounted } from 'vue';
 import Select from './components/Select.vue';
 import { faculties, courses, specialtiesData } from '../../constants/studyData.js';
+import { api } from '../../api.js';
 
-// Функция для разбора ФИО на составляющие
-const parseFullName = fullName => {
-  const parts = fullName.trim().split(/\s+/);
-  return {
-    lastName: parts[0] || '',
-    firstName: parts[1] || '',
-    patronymic: parts[2] || '',
-  };
-};
+const loading = ref(true);
+const showSuccess = ref(false);
+const showPasswordSuccess = ref(false);
+const saveError = ref(null);
+const passwordError = ref(null);
+let successTimeout = null;
 
-// Функция для объединения в ФИО
-const combineFullName = (lastName, firstName, patronymic) => {
-  return [lastName, firstName, patronymic].filter(part => part.trim()).join(' ');
-};
-
-// Функция для разбора учебной информации
-const parseStudyInfo = studyInfo => {
-  // Ожидаемый формат: "Факультет, Специальность, Курс"
-  const parts = studyInfo.split(',').map(part => part.trim());
-  return {
-    faculty: parts[0] || '',
-    specialty: parts[1] || '',
-    course: parts[2] || '',
-  };
-};
-
-// Функция для объединения учебной информации
-const combineStudyInfo = (faculty, specialty, course) => {
-  return [faculty, specialty, course].filter(part => part).join(', ');
-};
-
-// Вычисляемое свойство для фильтрации специальностей
 const filteredSpecialties = computed(() => {
   if (!formData.faculty) return [];
   return specialtiesData[formData.faculty] || [];
 });
 
-// Исходные данные пользователя
-const userData = reactive({
-  fullName: 'Викторов Глеб Остапович',
-  studyInfo: 'ФКП, ПОИТ, 4 курс',
-  role: 'Студент',
-  phoneNumber: '+375(33)33-33-333',
-  email: 'gleb@mail.ru',
-  password: '8888',
-  avatarUrl: 'https://i.pinimg.com/originals/ca/e3/20/cae32068d860aebece9c8c01b40b1d77.jpg',
-});
-
-// Разбираем начальные данные
-const initialNameParts = parseFullName(userData.fullName);
-const initialStudyParts = parseStudyInfo(userData.studyInfo);
-
-// Данные формы
+const profile = ref(null);
 const formData = reactive({
-  lastName: initialNameParts.lastName,
-  firstName: initialNameParts.firstName,
-  patronymic: initialNameParts.patronymic,
-  faculty: initialStudyParts.faculty,
-  specialty: initialStudyParts.specialty,
-  course: initialStudyParts.course,
-  role: userData.role,
-  phoneNumber: userData.phoneNumber,
-  email: userData.email,
-  password: userData.password,
-  avatarUrl: userData.avatarUrl,
+  lastName: '',
+  firstName: '',
+  patronymic: '',
+  faculty: '',
+  specialty: '',
+  course: '',
+  phoneNumber: '',
+  email: '',
+  avatarUrl: '',
 });
 
-const showSuccess = ref(false);
-let successTimeout = null;
+const passwordData = reactive({
+  currentPassword: '',
+  newPassword: '',
+});
+
 const show = ref(false);
+const showNew = ref(false);
 
-// Обработчики изменений
-const onFacultyChange = () => {
+function onFacultyChange() {
   formData.specialty = '';
-};
+}
 
-// Сохранение данных
-const saveUserData = () => {
-  // Собираем ФИО из трёх полей
-  userData.fullName = combineFullName(formData.lastName, formData.firstName, formData.patronymic);
-  // Собираем учебную информацию из трёх полей
-  userData.studyInfo = combineStudyInfo(formData.faculty, formData.specialty, formData.course);
-  userData.role = formData.role;
-  userData.avatarUrl = formData.avatarUrl;
-  userData.phoneNumber = formData.phoneNumber;
-  userData.email = formData.email;
-  userData.password = formData.password;
+function fillForm(p) {
+  formData.lastName = p.lastName || '';
+  formData.firstName = p.firstName || '';
+  formData.patronymic = p.patronymic || '';
+  formData.faculty = p.faculty || '';
+  formData.specialty = p.specialty || '';
+  formData.course = p.course || '';
+  formData.phoneNumber = p.phoneNumber || '';
+  formData.email = p.email || '';
+  formData.avatarUrl = p.avatarUrl || '';
+}
 
-  showSuccess.value = true;
+onMounted(async () => {
+  try {
+    const p = await api.get('/users/me');
+    profile.value = p;
+    fillForm(p);
+  } catch (e) {
+    console.error('Ошибка загрузки профиля:', e);
+  } finally {
+    loading.value = false;
+  }
+});
 
-  if (successTimeout) clearTimeout(successTimeout);
-  successTimeout = setTimeout(() => {
-    showSuccess.value = false;
-  }, 3000);
-};
+async function saveUserData() {
+  saveError.value = null;
+  try {
+    const updated = await api.put('/users/me', {
+      firstName: formData.firstName.trim(),
+      lastName: formData.lastName.trim(),
+      patronymic: formData.patronymic.trim() || null,
+      faculty: formData.faculty || null,
+      specialty: formData.specialty || null,
+      course: formData.course || null,
+      phoneNumber: formData.phoneNumber.trim() || null,
+      email: formData.email.trim(),
+      avatarUrl: formData.avatarUrl.trim() || null,
+    });
+    profile.value = updated;
+    localStorage.setItem('bookshelf_profile', JSON.stringify(updated));
+    showSuccess.value = true;
+    if (successTimeout) clearTimeout(successTimeout);
+    successTimeout = setTimeout(() => { showSuccess.value = false; }, 3000);
+  } catch (e) {
+    saveError.value = e.message || 'Ошибка сохранения';
+  }
+}
 
-// Сброс формы
-const resetForm = () => {
-  const currentNameParts = parseFullName(userData.fullName);
-  const currentStudyParts = parseStudyInfo(userData.studyInfo);
-
-  formData.lastName = currentNameParts.lastName;
-  formData.firstName = currentNameParts.firstName;
-  formData.patronymic = currentNameParts.patronymic;
-  formData.faculty = currentStudyParts.faculty;
-  formData.specialty = currentStudyParts.specialty;
-  formData.course = currentStudyParts.course;
-  formData.role = userData.role;
-  formData.avatarUrl = userData.avatarUrl;
-  formData.phoneNumber = userData.phoneNumber;
-  formData.email = userData.email;
-  formData.password = userData.password;
-
+function resetForm() {
+  if (profile.value) fillForm(profile.value);
   showSuccess.value = false;
-};
+  saveError.value = null;
+}
+
+async function changePassword() {
+  passwordError.value = null;
+  if (!passwordData.currentPassword || !passwordData.newPassword) {
+    passwordError.value = 'Заполните оба поля';
+    return;
+  }
+  if (passwordData.newPassword.length < 6) {
+    passwordError.value = 'Новый пароль должен содержать не менее 6 символов';
+    return;
+  }
+  try {
+    await api.put('/users/me/password', {
+      currentPassword: passwordData.currentPassword,
+      newPassword: passwordData.newPassword,
+    });
+    passwordData.currentPassword = '';
+    passwordData.newPassword = '';
+    showPasswordSuccess.value = true;
+    setTimeout(() => { showPasswordSuccess.value = false; }, 3000);
+  } catch (e) {
+    passwordError.value = e.message || 'Ошибка смены пароля';
+  }
+}
 </script>
 
 <template>
   <div class="p-8">
-    <div class="flex gap-4 mb-8">
-      <UAvatar :src="userData.avatarUrl" style="width: 125px; height: 125px" />
-      <div class="flex flex-col gap-2">
-        <h2 class="text-black font-semibold text-xl">{{ userData.fullName }}</h2>
-        <p class="text-black font-semibold">{{ userData.studyInfo }}</p>
-        <p color="gray">{{ userData.role }}</p>
-      </div>
+    <div v-if="loading" class="flex justify-center py-12">
+      <div class="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-500"></div>
     </div>
 
-    <div class="border-t pt-6">
-      <h3 class="text-lg font-semibold mb-4">Редактировать данные</h3>
+    <template v-else>
+      <div class="flex gap-4 mb-8">
+        <UAvatar :src="profile?.avatarUrl" style="width: 125px; height: 125px" />
+        <div class="flex flex-col gap-2">
+          <h2 class="text-black font-semibold text-xl">
+            {{ [profile?.lastName, profile?.firstName, profile?.patronymic].filter(Boolean).join(' ') }}
+          </h2>
+          <p class="text-black font-semibold">
+            {{ [profile?.faculty, profile?.specialty, profile?.course].filter(Boolean).join(', ') }}
+          </p>
+          <p class="text-gray-600">{{ profile?.role === 'admin' ? 'Модератор' : 'Студент' }}</p>
+        </div>
+      </div>
 
-      <UForm :state="formData" class="space-y-4" @submit="saveUserData">
-        <div class="flex gap-4 w-full max-w-xl">
-          <UFormField label="Фамилия" name="lastName" class="flex-1">
-            <UInput v-model="formData.lastName" placeholder="Введите фамилию" highlight variant="outline" size="xl" />
-          </UFormField>
+      <div class="border-t pt-6">
+        <h3 class="text-lg font-semibold mb-4">Редактировать данные</h3>
 
-          <UFormField label="Имя" name="firstName" class="flex-1">
-            <UInput v-model="formData.firstName" placeholder="Введите имя" highlight variant="outline" size="xl" />
-          </UFormField>
+        <UForm :state="formData" class="space-y-4" @submit="saveUserData">
+          <div class="flex gap-4 w-full max-w-xl">
+            <UFormField label="Фамилия" name="lastName" class="flex-1">
+              <UInput v-model="formData.lastName" placeholder="Введите фамилию" highlight variant="outline" size="xl" />
+            </UFormField>
 
-          <UFormField label="Отчество" name="patronymic" class="flex-1">
+            <UFormField label="Имя" name="firstName" class="flex-1">
+              <UInput v-model="formData.firstName" placeholder="Введите имя" highlight variant="outline" size="xl" />
+            </UFormField>
+
+            <UFormField label="Отчество" name="patronymic" class="flex-1">
+              <UInput
+                v-model="formData.patronymic"
+                placeholder="Введите отчество"
+                highlight
+                variant="outline"
+                size="xl"
+              />
+            </UFormField>
+          </div>
+
+          <div class="flex gap-4 w-full max-w-xl">
+            <Select
+              v-model="formData.faculty"
+              label="Факультет"
+              name="faculty"
+              :items="faculties"
+              placeholder="Выберите факультет"
+              @change="onFacultyChange"
+            />
+
+            <Select
+              v-model="formData.specialty"
+              label="Специальность"
+              name="specialty"
+              :items="filteredSpecialties"
+              placeholder="Выберите специальность"
+              :disabled="!formData.faculty"
+            />
+
+            <Select v-model="formData.course" label="Курс" name="course" :items="courses" placeholder="Выберите курс" />
+          </div>
+
+          <UFormField label="Номер телефона" name="phoneNumber">
             <UInput
-              v-model="formData.patronymic"
-              placeholder="Введите отчество"
+              v-model="formData.phoneNumber"
               highlight
               variant="outline"
+              class="w-full max-w-xl"
+              placeholder="Например: +375(33)33-33-333"
               size="xl"
             />
           </UFormField>
-        </div>
 
-        <div class="flex gap-4 w-full max-w-xl">
-          <Select
-            v-model="formData.faculty"
-            label="Факультет"
-            name="faculty"
-            :items="faculties"
-            placeholder="Выберите факультет"
-            @change="onFacultyChange"
-          />
+          <UFormField label="Почта" name="email">
+            <UInput
+              v-model="formData.email"
+              highlight
+              variant="outline"
+              class="w-full max-w-xl"
+              placeholder="Например: student@gmail.com"
+              size="xl"
+            />
+          </UFormField>
 
-          <Select
-            v-model="formData.specialty"
-            label="Специальность"
-            name="specialty"
-            :items="filteredSpecialties"
-            placeholder="Выберите специальность"
-            :disabled="!formData.faculty"
-          />
+          <UFormField label="URL аватара" name="avatarUrl">
+            <UInput
+              v-model="formData.avatarUrl"
+              highlight
+              variant="outline"
+              class="w-full max-w-xl"
+              placeholder="https://..."
+              size="xl"
+            />
+          </UFormField>
 
-          <Select v-model="formData.course" label="Курс" name="course" :items="courses" placeholder="Выберите курс" />
-        </div>
+          <UAlert v-if="saveError" color="error" variant="soft" :description="saveError" class="max-w-xl" />
 
-        <UFormField label="Номер телефона" name="phoneNumber">
-          <UInput
-            v-model="formData.phoneNumber"
-            highlight
-            variant="outline"
-            class="w-full max-w-xl"
-            placeholder="Например: +375(33)33-33-333"
-            size="xl"
-          />
-        </UFormField>
+          <div class="flex gap-3">
+            <UButton type="submit" class="bg-green-300 text-black rounded-xl" size="xl"> Сохранить </UButton>
+            <UButton type="button" color="neutral" variant="outline" class="rounded-xl" @click="resetForm">
+              Отмена
+            </UButton>
+          </div>
 
-        <UFormField label="Почта" name="email">
-          <UInput
-            v-model="formData.email"
-            highlight
-            variant="outline"
-            class="w-full max-w-xl"
-            placeholder="Например: student@gmail.com"
-            size="xl"
-          />
-        </UFormField>
+          <UAlert v-if="showSuccess" color="success" variant="soft" description="Данные успешно сохранены" class="mt-4" />
+        </UForm>
+      </div>
 
-        <UFormField label="Пароль" name="password">
-          <UInput
-            v-model="formData.password"
-            class="w-full max-w-xl"
-            placeholder="Password"
-            :type="show ? 'text' : 'password'"
-            highlight
-            size="xl"
-            variant="outline"
-          >
-            <template #trailing>
-              <UButton
-                color="neutral"
-                variant="link"
-                size="sm"
-                :icon="show ? 'i-lucide-eye-off' : 'i-lucide-eye'"
-                :aria-label="show ? 'Hide password' : 'Show password'"
-                :aria-pressed="show"
-                aria-controls="password"
-                @click="show = !show"
-              />
-            </template>
-          </UInput>
-        </UFormField>
+      <div class="border-t pt-6 mt-6">
+        <h3 class="text-lg font-semibold mb-4">Сменить пароль</h3>
 
-        <div class="flex gap-3">
-          <UButton type="submit" class="bg-green-300 text-black rounded-xl" size="xl"> Сохранить </UButton>
-          <UButton type="button" color="neutral" variant="outline" class="rounded-xl" @click="resetForm">
-            Отмена
+        <div class="space-y-4 max-w-xl">
+          <UFormField label="Текущий пароль" name="currentPassword">
+            <UInput
+              v-model="passwordData.currentPassword"
+              :type="show ? 'text' : 'password'"
+              highlight
+              variant="outline"
+              class="w-full"
+              placeholder="Введите текущий пароль"
+              size="xl"
+            >
+              <template #trailing>
+                <UButton
+                  color="neutral"
+                  variant="link"
+                  size="sm"
+                  :icon="show ? 'i-lucide-eye-off' : 'i-lucide-eye'"
+                  @click="show = !show"
+                />
+              </template>
+            </UInput>
+          </UFormField>
+
+          <UFormField label="Новый пароль" name="newPassword">
+            <UInput
+              v-model="passwordData.newPassword"
+              :type="showNew ? 'text' : 'password'"
+              highlight
+              variant="outline"
+              class="w-full"
+              placeholder="Минимум 6 символов"
+              size="xl"
+            >
+              <template #trailing>
+                <UButton
+                  color="neutral"
+                  variant="link"
+                  size="sm"
+                  :icon="showNew ? 'i-lucide-eye-off' : 'i-lucide-eye'"
+                  @click="showNew = !showNew"
+                />
+              </template>
+            </UInput>
+          </UFormField>
+
+          <UAlert v-if="passwordError" color="error" variant="soft" :description="passwordError" />
+          <UAlert v-if="showPasswordSuccess" color="success" variant="soft" description="Пароль успешно изменён" />
+
+          <UButton class="bg-green-300 text-black rounded-xl" size="xl" @click="changePassword">
+            Сменить пароль
           </UButton>
         </div>
-
-        <UAlert v-if="showSuccess" color="success" variant="soft" description="Данные успешно сохранены" class="mt-4" />
-      </UForm>
-    </div>
+      </div>
+    </template>
   </div>
 </template>

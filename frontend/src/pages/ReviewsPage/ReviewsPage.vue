@@ -1,93 +1,96 @@
 <script setup>
-import { computed, reactive, ref } from 'vue';
+import { computed, reactive, ref, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 import { getGenreColor } from '../../constants/genreColors';
+import { api } from '../../api.js';
 
 const router = useRouter();
 
-const booksCatalog = [
-  {
-    id: 'book-satan',
-    title: 'Скорбь сатаны',
-    author: 'Мария Корелли',
-    genre: 'Роман',
-    coverUrl: 'https://cdn21vek.by/img/galleries/9475/355/eksmo_9475355_ecbee5c8328985f84402e430947ecd9e.jpg',
-  },
-  {
-    id: 'book-ave-maria',
-    title: 'Проект "Ave Maria"',
-    author: 'Энди Вейер',
-    genre: 'Научная фантастика',
-    coverUrl: 'https://cdn.litres.ru/pub/c/cover_415/66986536.jpg',
-  },
-  {
-    id: 'book-hunger-games',
-    title: 'Голодные игры',
-    author: 'Сьюзен Коллинз',
-    genre: 'Фэнтези',
-    coverUrl: 'https://igromaster.by/upload/iblock/04f/04f3eacdf9593988d8e4f85bb6402705.webp?1602251488',
-  },
-  {
-    id: 'book-kwebe',
-    title: 'Правда о деле Гарри Квеберта',
-    author: 'Жоэль Диккер',
-    genre: 'Детектив',
-    coverUrl: 'https://avatars.mds.yandex.net/get-mpic/16148264/2a0000019b7c29f4486905ed413485483f01/orig',
-  },
-];
-
-const reviews = reactive([
-  {
-    id: 'rev-1',
-    bookId: 'book-satan',
-    bookTitle: 'Скорбь сатаны',
-    author: 'Мария Корелли',
-    genre: 'Роман',
-    coverUrl: 'https://cdn21vek.by/img/galleries/9475/355/eksmo_9475355_ecbee5c8328985f84402e430947ecd9e.jpg',
-    rating: 5,
-    text: 'В центре повествования — талантливый, но бедный и гордый писатель. Роман читается легко, при этом оставляет сильное послевкусие и заставляет задуматься о выборе и ответственности.\n\nОсобенно понравилась атмосфера и то, как автор раскрывает характеры. Некоторые моменты кажутся наивными, но в целом это не мешает цельности истории.',
-    createdAt: '2026-04-10',
-  },
-]);
+const reviews = ref([]);
+const loading = ref(true);
 
 const editingId = ref(null);
 const isEditing = ref(false);
 const saving = ref(false);
 const savedToast = ref(false);
+const saveError = ref(null);
 let savedTimer = null;
 
-const current = computed(() => reviews.find(r => r.id === editingId.value) || null);
+// Draft for inline editing
+const editDraft = reactive({ rating: 0, text: '' });
+
+function formatDate(dateStr) {
+  if (!dateStr) return '';
+  return String(dateStr).split('T')[0];
+}
+
+onMounted(async () => {
+  try {
+    const data = await api.get('/reviews/my?size=50');
+    reviews.value = data.content || [];
+  } catch (e) {
+    console.error('Ошибка загрузки рецензий:', e);
+  } finally {
+    loading.value = false;
+  }
+});
+
+function startEdit(reviewId) {
+  if (isEditing.value && editingId.value !== reviewId) {
+    if (!confirm('Есть несохранённые изменения. Продолжить без сохранения?')) return;
+  }
+  const review = reviews.value.find(r => r.id === reviewId);
+  if (!review) return;
+  editingId.value = reviewId;
+  editDraft.rating = review.rating;
+  editDraft.text = review.text;
+  isEditing.value = true;
+  saveError.value = null;
+}
 
 function setRating(value) {
-  const r = current.value;
-  if (!r) return;
   if (!isEditing.value) return;
-  r.rating = value;
+  editDraft.rating = value;
 }
 
 async function save() {
   if (!isEditing.value) return;
-  saving.value = true;
-  await new Promise(r => setTimeout(r, 400));
-  saving.value = false;
-  savedToast.value = true;
-  isEditing.value = false;
-  if (savedTimer) window.clearTimeout(savedTimer);
-  savedTimer = window.setTimeout(() => {
-    savedToast.value = false;
-  }, 2500);
-}
-
-function startEdit(reviewId) {
-  if (
-    isEditing.value &&
-    editingId.value !== reviewId &&
-    !confirm('Есть несохранённые изменения. Продолжить без сохранения?')
-  ) {
+  if (editDraft.text.trim().length < 200) {
+    saveError.value = 'Рецензия должна содержать не менее 200 символов';
     return;
   }
-  editingId.value = reviewId;
-  isEditing.value = true;
+  saving.value = true;
+  saveError.value = null;
+  try {
+    const updated = await api.put(`/reviews/${editingId.value}`, {
+      rating: editDraft.rating,
+      text: editDraft.text.trim(),
+    });
+    const idx = reviews.value.findIndex(r => r.id === editingId.value);
+    if (idx !== -1) reviews.value[idx] = updated;
+    savedToast.value = true;
+    isEditing.value = false;
+    if (savedTimer) window.clearTimeout(savedTimer);
+    savedTimer = window.setTimeout(() => { savedToast.value = false; }, 2500);
+  } catch (e) {
+    saveError.value = e.message || 'Ошибка сохранения';
+  } finally {
+    saving.value = false;
+  }
+}
+
+async function deleteReview(id) {
+  if (!confirm('Удалить эту рецензию?')) return;
+  try {
+    await api.delete(`/reviews/${id}`);
+    reviews.value = reviews.value.filter(r => r.id !== id);
+    if (editingId.value === id) {
+      editingId.value = null;
+      isEditing.value = false;
+    }
+  } catch (e) {
+    console.error('Ошибка удаления:', e);
+  }
 }
 
 // Add review modal
@@ -96,67 +99,81 @@ const addQuery = ref('');
 const addSelectedBookId = ref(null);
 const addRating = ref(0);
 const addText = ref('');
+const addError = ref(null);
+const addSubmitting = ref(false);
+const addSubmitted = ref(false);
+
+const booksCatalog = ref([]);
+
+async function loadCatalog() {
+  if (booksCatalog.value.length > 0) return;
+  try {
+    const data = await api.get('/books?size=100');
+    booksCatalog.value = data.content || [];
+  } catch (e) {
+    console.error('Ошибка загрузки каталога:', e);
+  }
+}
 
 const filteredBooks = computed(() => {
   const q = addQuery.value.trim().toLowerCase();
-  if (!q) return booksCatalog;
-  return booksCatalog.filter(
-    b => b.title.toLowerCase().includes(q) || b.author.toLowerCase().includes(q) || b.genre.toLowerCase().includes(q),
+  const base = booksCatalog.value;
+  if (!q) return base;
+  return base.filter(
+    b =>
+      (b.title || '').toLowerCase().includes(q) ||
+      (b.author || '').toLowerCase().includes(q) ||
+      (b.genre || '').toLowerCase().includes(q),
   );
 });
 
-const selectedBook = computed(() => booksCatalog.find(b => b.id === addSelectedBookId.value) || null);
+const selectedBook = computed(() => booksCatalog.value.find(b => b.id === addSelectedBookId.value) || null);
 
-function openAdd() {
+async function openAdd() {
   addQuery.value = '';
   addSelectedBookId.value = null;
   addRating.value = 0;
   addText.value = '';
+  addError.value = null;
+  addSubmitted.value = false;
   addOpen.value = true;
+  await loadCatalog();
 }
 
 function setAddRating(value) {
   addRating.value = value;
 }
 
-function addReview() {
-  if (!selectedBook.value) return;
-  if (addRating.value <= 0) return;
+async function addReview() {
+  addError.value = null;
+  if (!selectedBook.value) { addError.value = 'Выберите книгу'; return; }
+  if (addRating.value <= 0) { addError.value = 'Поставьте оценку'; return; }
   const text = addText.value.trim();
-  if (!text) return;
+  if (!text) { addError.value = 'Напишите текст рецензии'; return; }
+  if (text.length < 200) { addError.value = 'Рецензия должна содержать не менее 200 символов'; return; }
 
-  const b = selectedBook.value;
-  const id = `rev-${Math.random().toString(36).slice(2, 9)}`;
-  reviews.unshift({
-    id,
-    bookId: b.id,
-    bookTitle: b.title,
-    author: b.author,
-    genre: b.genre,
-    coverUrl: b.coverUrl,
-    rating: addRating.value,
-    text,
-    createdAt: new Date().toISOString().split('T')[0],
-  });
-  addOpen.value = false;
-}
-
-// Удаление рецензии
-function deleteReview(id) {
-  if (!confirm('Удалить эту рецензию?')) return;
-
-  const index = reviews.findIndex(r => r.id === id);
-  if (index !== -1) {
-    reviews.splice(index, 1);
-  }
-
-  if (editingId.value === id) {
-    editingId.value = null;
-    isEditing.value = false;
+  addSubmitting.value = true;
+  try {
+    await api.post('/reviews', {
+      bookId: addSelectedBookId.value,
+      rating: addRating.value,
+      text,
+    });
+    addSubmitted.value = true;
+    addSelectedBookId.value = null;
+    addRating.value = 0;
+    addText.value = '';
+    // Reload reviews to pick up the new pending one
+    const data = await api.get('/reviews/my?size=50');
+    reviews.value = data.content || [];
+    setTimeout(() => { addOpen.value = false; }, 1500);
+  } catch (e) {
+    addError.value = e.message || 'Ошибка при отправке';
+  } finally {
+    addSubmitting.value = false;
   }
 }
 
-// Переход на страницу книги
 function goToBook(bookId) {
   router.push(`/book/${bookId}`);
 }
@@ -170,8 +187,12 @@ function goToBook(bookId) {
         <UButton class="bg-white text-black rounded-xl" size="lg" @click="openAdd"> Добавить рецензию </UButton>
       </div>
 
+      <div v-if="loading" class="flex justify-center py-12">
+        <div class="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-500"></div>
+      </div>
+
       <!-- Список рецензий -->
-      <div v-if="reviews.length" class="space-y-6">
+      <div v-else-if="reviews.length" class="space-y-6">
         <UCard
           v-for="review in reviews"
           :key="review.id"
@@ -184,7 +205,11 @@ function goToBook(bookId) {
                 class="w-full max-w-[200px] aspect-2/3 rounded-2xl bg-gray-100 overflow-hidden shadow-md cursor-pointer hover:opacity-90 transition-opacity"
                 @click="goToBook(review.bookId)"
               >
-                <img class="w-full h-full object-cover" :src="review.coverUrl" :alt="review.bookTitle" />
+                <img
+                  class="w-full h-full object-cover"
+                  :src="review.coverUrl || ''"
+                  :alt="review.bookTitle"
+                />
               </div>
             </div>
 
@@ -204,9 +229,16 @@ function goToBook(bookId) {
                     >
                       {{ review.genre }}
                     </span>
+                    <span
+                      v-if="review.status && review.status !== 'APPROVED'"
+                      class="inline-flex px-3 py-0.5 text-xs font-medium rounded-full"
+                      :class="review.status === 'PENDING' ? 'bg-yellow-100 text-yellow-700' : 'bg-red-100 text-red-700'"
+                    >
+                      {{ review.status === 'PENDING' ? 'На модерации' : 'Отклонено' }}
+                    </span>
                   </div>
                   <p class="text-md text-gray-800 mt-1">{{ review.author }}</p>
-                  <p class="text-xs text-gray-400 mt-1">{{ review.createdAt }}</p>
+                  <p class="text-xs text-gray-400 mt-1">{{ formatDate(review.createdAt) }}</p>
                 </div>
 
                 <div class="flex gap-2">
@@ -267,7 +299,7 @@ function goToBook(bookId) {
                   <svg
                     viewBox="0 0 24 24"
                     class="w-8 h-8"
-                    :class="i <= review.rating ? 'text-yellow-300' : 'text-gray-200'"
+                    :class="(editingId === review.id && isEditing ? i <= editDraft.rating : i <= review.rating) ? 'text-yellow-300' : 'text-gray-200'"
                     fill="currentColor"
                   >
                     <path
@@ -280,12 +312,13 @@ function goToBook(bookId) {
               <div class="mt-4 flex-1">
                 <div v-if="editingId === review.id && isEditing" class="space-y-4">
                   <UTextarea
-                    :model-value="review.text"
+                    v-model="editDraft.text"
                     :rows="6"
                     class="w-full"
                     placeholder="Напишите вашу рецензию..."
-                    @update:model-value="val => (review.text = val)"
                   />
+                  <p class="text-xs text-gray-400">{{ editDraft.text.length }} / 200</p>
+                  <UAlert v-if="saveError" color="error" variant="soft" :description="saveError" />
                   <div class="flex items-center justify-end gap-4">
                     <UAlert
                       v-if="savedToast && editingId === review.id"
@@ -331,6 +364,13 @@ function goToBook(bookId) {
   <UModal v-model:open="addOpen" title="Добавить рецензию">
     <template #body>
       <div class="space-y-5">
+        <UAlert
+          v-if="addSubmitted"
+          color="success"
+          variant="soft"
+          description="Рецензия отправлена на модерацию!"
+        />
+
         <div class="rounded-2xl border border-gray-200 bg-white p-4">
           <div class="flex items-center justify-between mb-3">
             <h3 class="font-semibold text-black">Выберите книгу</h3>
@@ -350,7 +390,11 @@ function goToBook(bookId) {
               @click="addSelectedBookId = b.id"
             >
               <div class="flex items-start gap-3">
-                <img class="w-12 h-16 object-cover rounded-md flex-none" :src="b.coverUrl" :alt="b.title" />
+                <img
+                  class="w-12 h-16 object-cover rounded-md flex-none bg-gray-100"
+                  :src="b.imageUrl || b.coverUrl || ''"
+                  :alt="b.title"
+                />
                 <div class="flex-1">
                   <div class="flex items-center gap-2 flex-wrap">
                     <div class="font-semibold text-black line-clamp-1">{{ b.title }}</div>
@@ -402,9 +446,12 @@ function goToBook(bookId) {
             v-model="addText"
             :rows="8"
             class="w-full"
-            placeholder="Напишите вашу рецензию..."
+            placeholder="Напишите вашу рецензию (минимум 200 символов)..."
             :disabled="!selectedBook"
           />
+          <p class="text-xs text-gray-400">{{ addText.length }} / 200</p>
+
+          <UAlert v-if="addError" color="error" variant="soft" :description="addError" />
         </div>
       </div>
     </template>
@@ -412,7 +459,7 @@ function goToBook(bookId) {
     <template #footer>
       <div class="flex justify-end gap-3 w-full">
         <UButton variant="outline" @click="addOpen = false">Отмена</UButton>
-        <UButton class="bg-green-300 text-black rounded-xl" @click="addReview"> Добавить </UButton>
+        <UButton :loading="addSubmitting" class="bg-green-300 text-black rounded-xl" @click="addReview"> Добавить </UButton>
       </div>
     </template>
   </UModal>

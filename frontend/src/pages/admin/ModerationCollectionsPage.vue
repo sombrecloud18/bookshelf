@@ -1,91 +1,47 @@
 <script setup>
-import { ref, computed } from 'vue';
+import { ref, computed, onMounted } from 'vue';
 import { getGenreColor } from '../../constants/genreColors';
+import { api } from '../../api.js';
 
-const allBooks = [
-  {
-    id: 'book-satan',
-    title: 'Скорбь сатаны',
-    coverUrl: 'https://cdn21vek.by/img/galleries/9475/355/eksmo_9475355_ecbee5c8328985f84402e430947ecd9e.jpg',
-    shortDescription: 'Мрачный роман с сильной атмосферой и интригой.',
-  },
-  {
-    id: 'book-ave-maria',
-    title: 'Проект "Ave Maria"',
-    coverUrl: 'https://cdn.litres.ru/pub/c/cover_415/66986536.jpg',
-    shortDescription: 'Научная фантастика о технологиях, морали и последствиях.',
-  },
-  {
-    id: 'book-hunger-games',
-    title: 'Голодные игры',
-    coverUrl: 'https://igromaster.by/upload/iblock/04f/04f3eacdf9593988d8e4f85bb6402705.webp?1602251488',
-    shortDescription: 'Антиутопия о выживании, выборе и цене власти.',
-  },
-  {
-    id: 'book-kwebe',
-    title: 'Правда о деле Гарри Квеберта',
-    coverUrl: 'https://avatars.mds.yandex.net/get-mpic/16148264/2a0000019b7c29f4486905ed413485483f01/orig',
-    shortDescription: 'Детектив с флешбэками и неожиданными поворотами.',
-  },
-  {
-    id: 'book-master',
-    title: 'Мастер и Маргарита',
-    coverUrl: 'https://imo10.labirint.ru/books/668307/cover.jpg/242-0',
-    shortDescription: 'Классика: любовь, драма и философские мотивы.',
-  },
-  {
-    id: 'book-bookship',
-    title: 'Bookship',
-    coverUrl: 'https://s2-goods.ozstatic.by/1000/333/453/101/101453333_0.jpg',
-    shortDescription: 'Фантастическая история о кораблях, времени и дружбе.',
-  },
-  {
-    id: 'book-institute',
-    title: 'Институт',
-    coverUrl: 'https://imo10.labirint.ru/books/903891/cover.jpg/242-0',
-    shortDescription: 'Напряжённый сюжет и вопросы о свободе воли.',
-  },
-  {
-    id: 'book-crows',
-    title: 'Шестерка воронов',
-    coverUrl: 'https://imo10.labirint.ru/books/635534/cover.jpg/242-0',
-    shortDescription: 'Фэнтези о командах, хитрости и больших ставках.',
-  },
-];
+const collectionsQueue = ref([]);
+const booksCache = ref({});
+const loading = ref(true);
 
-const booksById = Object.fromEntries(allBooks.map(b => [b.id, b]));
+function formatDate(dateStr) {
+  if (!dateStr) return '';
+  return String(dateStr).split('T')[0];
+}
 
-const collectionsQueue = ref([
-  {
-    id: 'col-pending-1',
-    title: 'Любимые романы',
-    genre: 'Роман',
-    description: 'Подборка для вечеров, когда хочется глубины и атмосферы.',
-    bookIds: ['book-master', 'book-satan', 'book-kwebe'],
-    author: 'student1',
-    authorName: 'Анна Смирнова',
-    createdAt: '2026-04-10',
-    status: 'pending',
-  },
-  {
-    id: 'col-pending-2',
-    title: 'Фантастика: технологии и выбор',
-    genre: 'Фантастика',
-    description: 'Книги, которые заставляют думать о будущем и людях.',
-    bookIds: ['book-ave-maria', 'book-institute', 'book-bookship'],
-    author: 'student2',
-    authorName: 'Михаил Петров',
-    createdAt: '2026-04-11',
-    status: 'pending',
-  },
-]);
+async function loadBookCovers(bookIds) {
+  const missing = (bookIds || []).filter(id => !booksCache.value[id]);
+  if (missing.length === 0) return;
+  try {
+    const books = await api.post('/books/by-ids', { ids: missing });
+    books.forEach(b => { booksCache.value[b.id] = b; });
+  } catch (e) {
+    console.error('Ошибка загрузки книг:', e);
+  }
+}
+
+onMounted(async () => {
+  try {
+    const data = await api.get('/collections/pending?size=50');
+    collectionsQueue.value = data.content || [];
+    const allIds = [...new Set(collectionsQueue.value.flatMap(c => c.bookIds || []))];
+    if (allIds.length > 0) await loadBookCovers(allIds);
+  } catch (e) {
+    console.error('Ошибка загрузки подборок:', e);
+  } finally {
+    loading.value = false;
+  }
+});
 
 const selectedCollection = ref(null);
 const showDetailsModal = ref(false);
 
 const booksInCollection = computed(() => {
   if (!selectedCollection.value) return [];
-  return selectedCollection.value.bookIds.map(id => booksById[id]).filter(Boolean);
+  return (selectedCollection.value.bookIds || []).map(id => booksCache.value[id]).filter(Boolean);
 });
 
 function viewDetails(collection) {
@@ -93,25 +49,25 @@ function viewDetails(collection) {
   showDetailsModal.value = true;
 }
 
-function approveCollection(id) {
-  const index = collectionsQueue.value.findIndex(c => c.id === id);
-  if (index !== -1) {
-    // В реальном приложении здесь был бы API запрос
-    console.log('Одобрена подборка:', collectionsQueue.value[index].title);
-    collectionsQueue.value.splice(index, 1);
+async function approveCollection(id) {
+  try {
+    await api.post(`/collections/${id}/approve`);
+    collectionsQueue.value = collectionsQueue.value.filter(c => c.id !== id);
+    showDetailsModal.value = false;
+  } catch (e) {
+    console.error('Ошибка одобрения:', e);
   }
-  showDetailsModal.value = false;
 }
 
-function rejectCollection(id) {
+async function rejectCollection(id) {
   const collection = collectionsQueue.value.find(c => c.id === id);
-  if (confirm(`Отклонить подборку «${collection?.title}»?`)) {
-    const index = collectionsQueue.value.findIndex(c => c.id === id);
-    if (index !== -1) {
-      console.log('Отклонена подборка:', collectionsQueue.value[index].title);
-      collectionsQueue.value.splice(index, 1);
-    }
+  if (!confirm(`Отклонить подборку «${collection?.title}»?`)) return;
+  try {
+    await api.post(`/collections/${id}/reject`);
+    collectionsQueue.value = collectionsQueue.value.filter(c => c.id !== id);
     showDetailsModal.value = false;
+  } catch (e) {
+    console.error('Ошибка отклонения:', e);
   }
 }
 </script>
@@ -127,7 +83,11 @@ function rejectCollection(id) {
         <UButton to="/admin" variant="ghost" class="rounded-xl">← Назад</UButton>
       </div>
 
-      <UCard variant="soft" class="bg-white rounded-2xl p-5">
+      <div v-if="loading" class="flex justify-center py-12">
+        <div class="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-500"></div>
+      </div>
+
+      <UCard v-else variant="soft" class="bg-white rounded-2xl p-5">
         <div v-if="collectionsQueue.length === 0" class="text-center py-12 text-gray-500">
           <svg class="w-16 h-16 mx-auto mb-4 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path
@@ -157,7 +117,7 @@ function rejectCollection(id) {
                 >
                   {{ collection.genre }}
                 </span>
-                <span class="text-xs text-gray-400">{{ collection.createdAt }}</span>
+                <span class="text-xs text-gray-400">{{ formatDate(collection.createdAt) }}</span>
               </div>
 
               <div class="mt-3">
@@ -166,21 +126,15 @@ function rejectCollection(id) {
                 <p v-if="collection.description" class="mt-2 text-sm text-gray-700 line-clamp-2">
                   {{ collection.description }}
                 </p>
-                <p class="mt-2 text-xs text-gray-500">Книг: {{ collection.bookIds.length }}</p>
+                <p class="mt-2 text-xs text-gray-500">Книг: {{ (collection.bookIds || []).length }}</p>
               </div>
 
-              <div
-                class="aspect-2/3 w-full overflow-hidden rounded-lg mt-4 bg-gray-100 flex items-center justify-center"
-              >
+              <div class="aspect-2/3 w-full overflow-hidden rounded-lg mt-4 bg-gray-100 flex items-center justify-center">
                 <div class="relative h-[80%] w-[78%]">
-                  <div v-if="collection.bookIds.length === 0" class="text-xs text-gray-500 text-center">Нет книг</div>
+                  <div v-if="(collection.bookIds || []).length === 0" class="text-xs text-gray-500 text-center">Нет книг</div>
                   <template v-else>
                     <img
-                      v-for="(b, idx) in collection.bookIds
-                        .slice(-2)
-                        .map(id => booksById[id])
-                        .filter(Boolean)
-                        .reverse()"
+                      v-for="(b, idx) in (collection.bookIds || []).slice(-2).map(id => booksCache[id]).filter(Boolean).reverse()"
                       :key="b.id"
                       class="absolute h-full rounded-2xl shadow-lg border border-white bg-white/90 p-1 object-cover"
                       :style="{
@@ -189,7 +143,7 @@ function rejectCollection(id) {
                         transform: 'translateY(-50%)',
                         zIndex: 10 + idx,
                       }"
-                      :src="b.coverUrl"
+                      :src="b.coverUrl || b.imageUrl || ''"
                       :alt="b.title"
                     />
                   </template>
@@ -225,7 +179,7 @@ function rejectCollection(id) {
       </UCard>
 
       <!-- Модальное окно с подробностями подборки -->
-      <UModal v-model="showDetailsModal" class="z-100">
+      <UModal v-model:open="showDetailsModal" class="z-100">
         <template #body>
           <div v-if="selectedCollection" class="space-y-4">
             <div class="bg-white rounded-2xl border border-gray-200 p-5">
@@ -234,6 +188,7 @@ function rejectCollection(id) {
                   <div class="flex items-center gap-3 flex-wrap">
                     <h2 class="text-2xl font-bold text-black">{{ selectedCollection.title }}</h2>
                     <span
+                      v-if="selectedCollection.genre"
                       class="inline-flex px-3 py-1 text-sm font-medium rounded-md"
                       :class="getGenreColor(selectedCollection.genre)"
                     >
@@ -246,7 +201,7 @@ function rejectCollection(id) {
                       {{ selectedCollection.authorName || selectedCollection.author }}
                     </p>
                     <p class="text-sm text-gray-600">
-                      <span class="font-semibold">Дата создания:</span> {{ selectedCollection.createdAt }}
+                      <span class="font-semibold">Дата создания:</span> {{ formatDate(selectedCollection.createdAt) }}
                     </p>
                     <p
                       v-if="selectedCollection.description"
@@ -269,10 +224,14 @@ function rejectCollection(id) {
                   class="p-3 rounded-xl border border-gray-200 bg-gray-50"
                 >
                   <div class="flex items-start gap-3">
-                    <img class="w-12 h-16 object-cover rounded-md flex-none" :src="book.coverUrl" :alt="book.title" />
+                    <img
+                      class="w-12 h-16 object-cover rounded-md flex-none bg-gray-100"
+                      :src="book.coverUrl || book.imageUrl || ''"
+                      :alt="book.title"
+                    />
                     <div>
                       <div class="font-semibold text-black">{{ book.title }}</div>
-                      <div class="text-xs text-gray-600 mt-1 line-clamp-2">{{ book.shortDescription }}</div>
+                      <div class="text-xs text-gray-600 mt-1 line-clamp-2">{{ book.description }}</div>
                     </div>
                   </div>
                 </div>

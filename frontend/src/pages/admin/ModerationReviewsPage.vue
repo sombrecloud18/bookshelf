@@ -1,37 +1,26 @@
 <script setup>
-import { ref } from 'vue';
+import { ref, onMounted } from 'vue';
 import { getGenreColor } from '../../constants/genreColors';
+import { api } from '../../api.js';
 
-const reviewsQueue = ref([
-  {
-    id: 'rev-pending-1',
-    bookId: 'book-satan',
-    bookTitle: 'Скорбь сатаны',
-    author: 'Мария Корелли',
-    genre: 'Роман',
-    coverUrl: 'https://cdn21vek.by/img/galleries/9475/355/eksmo_9475355_ecbee5c8328985f84402e430947ecd9e.jpg',
-    rating: 5,
-    text: 'В центре повествования — талантливый, но бедный и гордый писатель. Роман читается легко, при этом оставляет сильное послевкусие и заставляет задуматься о выборе и ответственности.\n\nОсобенно понравилась атмосфера и то, как автор раскрывает характеры. Некоторые моменты кажутся наивными, но в целом это не мешает цельности истории.',
-    reviewAuthor: 'student1',
-    reviewAuthorName: 'Анна Смирнова',
-    createdAt: '2026-04-10',
-    status: 'pending',
-  },
-  {
-    id: 'rev-pending-2',
-    bookId: 'book-hunger-games',
-    bookTitle: 'Голодные игры',
-    author: 'Сьюзен Коллинз',
-    genre: 'Фэнтези',
-    coverUrl: 'https://igromaster.by/upload/iblock/04f/04f3eacdf9593988d8e4f85bb6402705.webp?1602251488',
-    rating: 4,
-    text: 'Захватывающий сюжет и сильная главная героиня. Книга держит в напряжении до последней страницы. Рекомендую всем любителям антиутопий. Особенно понравилось описание Игр и то, как автор показывает психологию участников.',
-    reviewAuthor: 'student3',
-    reviewAuthorName: 'Елена Морозова',
-    createdAt: '2026-04-11',
-    status: 'pending',
-  },
-]);
+const reviewsQueue = ref([]);
+const loading = ref(true);
+
+function formatDate(dateStr) {
+  if (!dateStr) return '';
+  return String(dateStr).split('T')[0];
+}
+
+onMounted(async () => {
+  try {
+    const data = await api.get('/reviews/pending?size=50');
+    reviewsQueue.value = data.content || [];
+  } catch (e) {
+    console.error('Ошибка загрузки рецензий:', e);
+  } finally {
+    loading.value = false;
+  }
+});
 
 const selectedReview = ref(null);
 const showDetailsModal = ref(false);
@@ -41,24 +30,25 @@ function viewDetails(review) {
   showDetailsModal.value = true;
 }
 
-function approveReview(id) {
-  const index = reviewsQueue.value.findIndex(r => r.id === id);
-  if (index !== -1) {
-    console.log('Одобрена рецензия:', reviewsQueue.value[index].bookTitle);
-    reviewsQueue.value.splice(index, 1);
+async function approveReview(id) {
+  try {
+    await api.post(`/reviews/${id}/approve`);
+    reviewsQueue.value = reviewsQueue.value.filter(r => r.id !== id);
+    showDetailsModal.value = false;
+  } catch (e) {
+    console.error('Ошибка одобрения:', e);
   }
-  showDetailsModal.value = false;
 }
 
-function rejectReview(id) {
+async function rejectReview(id) {
   const review = reviewsQueue.value.find(r => r.id === id);
-  if (confirm(`Отклонить рецензию на книгу «${review?.bookTitle}»?`)) {
-    const index = reviewsQueue.value.findIndex(r => r.id === id);
-    if (index !== -1) {
-      console.log('Отклонена рецензия:', reviewsQueue.value[index].bookTitle);
-      reviewsQueue.value.splice(index, 1);
-    }
+  if (!confirm(`Отклонить рецензию на книгу «${review?.bookTitle}»?`)) return;
+  try {
+    await api.post(`/reviews/${id}/reject`);
+    reviewsQueue.value = reviewsQueue.value.filter(r => r.id !== id);
     showDetailsModal.value = false;
+  } catch (e) {
+    console.error('Ошибка отклонения:', e);
   }
 }
 </script>
@@ -74,7 +64,11 @@ function rejectReview(id) {
         <UButton to="/admin" variant="ghost" class="rounded-xl">← Назад</UButton>
       </div>
 
-      <UCard variant="soft" class="bg-white rounded-2xl p-5">
+      <div v-if="loading" class="flex justify-center py-12">
+        <div class="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-500"></div>
+      </div>
+
+      <UCard v-else variant="soft" class="bg-white rounded-2xl p-5">
         <div v-if="reviewsQueue.length === 0" class="text-center py-12 text-gray-500">
           <svg class="w-16 h-16 mx-auto mb-4 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path
@@ -98,8 +92,8 @@ function rejectReview(id) {
             <div class="flex flex-col md:flex-row gap-4">
               <div class="flex-shrink-0">
                 <img
-                  class="w-24 h-36 object-cover rounded-lg shadow-md"
-                  :src="review.coverUrl"
+                  class="w-24 h-36 object-cover rounded-lg shadow-md bg-gray-100"
+                  :src="review.coverUrl || ''"
                   :alt="review.bookTitle"
                 />
               </div>
@@ -124,7 +118,7 @@ function rejectReview(id) {
                       <span class="font-semibold">{{ review.rating }}</span>
                       <span class="text-gray-400 text-sm">/5</span>
                     </div>
-                    <p class="text-xs text-gray-400 mt-1">{{ review.createdAt }}</p>
+                    <p class="text-xs text-gray-400 mt-1">{{ formatDate(review.createdAt) }}</p>
                   </div>
                 </div>
 
@@ -133,7 +127,7 @@ function rejectReview(id) {
                 <div class="mt-3 flex flex-wrap items-center justify-between gap-3">
                   <p class="text-xs text-gray-500">
                     Автор рецензии:
-                    <span class="font-medium">{{ review.reviewAuthorName || review.reviewAuthor }}</span>
+                    <span class="font-medium">{{ review.reviewAuthorName || review.userName }}</span>
                   </p>
                   <div class="flex gap-2">
                     <UButton size="sm" color="primary" variant="soft" class="rounded-xl" @click="viewDetails(review)">
@@ -154,14 +148,14 @@ function rejectReview(id) {
       </UCard>
 
       <!-- Модальное окно с подробностями рецензии -->
-      <UModal v-model="showDetailsModal" class="z-100">
+      <UModal v-model:open="showDetailsModal" class="z-100">
         <template #body>
           <div v-if="selectedReview" class="space-y-4">
             <div class="bg-white rounded-2xl border border-gray-200 p-5">
               <div class="flex gap-4">
                 <img
-                  class="w-28 h-40 object-cover rounded-lg shadow-md flex-shrink-0"
-                  :src="selectedReview.coverUrl"
+                  class="w-28 h-40 object-cover rounded-lg shadow-md flex-shrink-0 bg-gray-100"
+                  :src="selectedReview.coverUrl || ''"
                   :alt="selectedReview.bookTitle"
                 />
                 <div class="flex-1">
@@ -184,10 +178,10 @@ function rejectReview(id) {
                     </div>
                     <div class="text-sm text-gray-500">
                       <span class="font-semibold">Автор рецензии:</span>
-                      {{ selectedReview.reviewAuthorName || selectedReview.reviewAuthor }}
+                      {{ selectedReview.reviewAuthorName || selectedReview.userName }}
                     </div>
                     <div class="text-sm text-gray-500">
-                      <span class="font-semibold">Дата:</span> {{ selectedReview.createdAt }}
+                      <span class="font-semibold">Дата:</span> {{ formatDate(selectedReview.createdAt) }}
                     </div>
                   </div>
                 </div>
@@ -204,7 +198,11 @@ function rejectReview(id) {
         </template>
 
         <template #footer>
-          <div class="flex justify-end gap-3 w-full">
+          <div class="flex justify-between gap-3 w-full">
+            <div class="flex gap-2">
+              <UButton color="green" class="rounded-xl" @click="approveReview(selectedReview?.id)">Одобрить</UButton>
+              <UButton color="red" variant="soft" class="rounded-xl" @click="rejectReview(selectedReview?.id)">Отклонить</UButton>
+            </div>
             <UButton variant="outline" @click="showDetailsModal = false">Закрыть</UButton>
           </div>
         </template>

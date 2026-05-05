@@ -1,17 +1,17 @@
 <script setup>
 import { computed, ref } from 'vue';
+import { api } from '../../../api.js';
 
 const props = defineProps({
   items: { type: Array, default: () => [] }, // [{ id, title, text }]
 });
 
-// mock: participation state stored locally per item
 const participants = ref(
   Object.fromEntries(
     props.items.map(i => [
       i.id,
       {
-        count: typeof i.participantsCount === 'number' ? i.participantsCount : 12,
+        count: typeof i.participantsCount === 'number' ? i.participantsCount : 0,
         status: null, // 'going' | 'not_going' | null
       },
     ]),
@@ -20,40 +20,54 @@ const participants = ref(
 
 const open = ref(false);
 const selectedId = ref(null);
+const loadingRegistration = ref(false);
 
 const selectedItem = computed(() => props.items.find(i => i.id === selectedId.value) || null);
 const selectedState = computed(() => (selectedId.value ? participants.value[selectedId.value] : null));
 
-function openDetails(id) {
+async function openDetails(id) {
   selectedId.value = id;
   open.value = true;
+  try {
+    const data = await api.get(`/events/${id}/registered`);
+    if (participants.value[id]) {
+      participants.value[id].status = data.registered ? 'going' : null;
+    }
+  } catch {
+    // ignore — user may not be authenticated
+  }
 }
 
-function confirmGoing() {
-  if (!selectedId.value) return;
+async function confirmGoing() {
+  if (!selectedId.value || loadingRegistration.value) return;
   const st = participants.value[selectedId.value];
-  if (!st) return;
-  if (st.status === 'going') return;
-  if (st.status === 'not_going') {
+  if (!st || st.status === 'going') return;
+  loadingRegistration.value = true;
+  try {
+    await api.post(`/events/${selectedId.value}/register`);
+    if (st.status !== 'going') st.count += 1;
     st.status = 'going';
-    st.count += 1;
-    return;
+  } catch (e) {
+    console.error('Ошибка регистрации:', e);
+  } finally {
+    loadingRegistration.value = false;
   }
-  st.status = 'going';
-  st.count += 1;
 }
 
-function confirmNotGoing() {
-  if (!selectedId.value) return;
+async function confirmNotGoing() {
+  if (!selectedId.value || loadingRegistration.value) return;
   const st = participants.value[selectedId.value];
-  if (!st) return;
-  if (st.status === 'not_going') return;
-  if (st.status === 'going') {
+  if (!st || st.status === 'not_going') return;
+  loadingRegistration.value = true;
+  try {
+    await api.delete(`/events/${selectedId.value}/register`);
+    if (st.status === 'going') st.count = Math.max(0, st.count - 1);
     st.status = 'not_going';
-    st.count = Math.max(0, st.count - 1);
-    return;
+  } catch (e) {
+    console.error('Ошибка отмены регистрации:', e);
+  } finally {
+    loadingRegistration.value = false;
   }
-  st.status = 'not_going';
 }
 </script>
 
@@ -95,8 +109,8 @@ function confirmNotGoing() {
       <div class="flex items-center justify-between gap-3 w-full">
         <UButton variant="outline" class="rounded-xl" @click="open = false">Закрыть</UButton>
         <div class="flex gap-3">
-          <UButton color="primary" class="rounded-xl" @click="confirmGoing">Подтвердить участие</UButton>
-          <UButton color="red" variant="soft" class="rounded-xl" @click="confirmNotGoing">Я не приду</UButton>
+          <UButton color="primary" class="rounded-xl" :loading="loadingRegistration" @click="confirmGoing">Подтвердить участие</UButton>
+          <UButton color="red" variant="soft" class="rounded-xl" :loading="loadingRegistration" @click="confirmNotGoing">Я не приду</UButton>
         </div>
       </div>
     </template>

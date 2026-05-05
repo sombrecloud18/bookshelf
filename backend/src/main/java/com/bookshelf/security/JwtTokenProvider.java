@@ -27,13 +27,16 @@ public class JwtTokenProvider {
     }
 
     public String generateToken(UUID userId, String role) {
-        return Jwts.builder()
+        log.debug("Генерация JWT: userId={}, role={}, expiresIn={}ms", userId, role, jwtExpiration);
+        String token = Jwts.builder()
                 .subject(userId.toString())
                 .claim("role", role)
                 .issuedAt(new Date())
                 .expiration(new Date(System.currentTimeMillis() + jwtExpiration))
                 .signWith(getSigningKey())
                 .compact();
+        log.info("JWT выдан: userId={}, role={}", userId, role);
+        return token;
     }
 
     public UUID getUserIdFromToken(String token) {

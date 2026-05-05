@@ -8,6 +8,7 @@ import com.bookshelf.entity.*;
 import com.bookshelf.exception.AppException;
 import com.bookshelf.repository.*;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -19,6 +20,7 @@ import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class ReviewService {
 
     private final ReviewRepository reviewRepository;
@@ -29,7 +31,9 @@ public class ReviewService {
 
     @Transactional
     public ReviewDTO createReview(UUID userId, CreateReviewDTO dto) {
+        log.debug("Создание рецензии: userId={}, bookId={}", userId, dto.getBookId());
         if (reviewRepository.existsByBookIdAndUserId(dto.getBookId(), userId)) {
+            log.warn("Дублирующая рецензия: userId={}, bookId={}", userId, dto.getBookId());
             throw AppException.conflict("Вы уже написали рецензию на эту книгу");
         }
 
@@ -48,8 +52,8 @@ public class ReviewService {
                 .build();
 
         review = reviewRepository.save(review);
+        log.info("Рецензия сохранена (ожидает модерации): id={}, bookId={}, userId={}", review.getId(), dto.getBookId(), userId);
 
-        // Record activity
         userActivityRepository.save(UserActivity.builder()
                 .user(user).book(book).activityType("REVIEW").build());
 
@@ -61,14 +65,16 @@ public class ReviewService {
         Review review = findById(reviewId);
 
         if (!review.getUser().getId().equals(userId)) {
+            log.warn("Попытка редактировать чужую рецензию: reviewId={}, requestUserId={}", reviewId, userId);
             throw AppException.forbidden("Вы не можете редактировать чужую рецензию");
         }
 
         review.setRating(dto.getRating());
         review.setText(dto.getText());
-        review.setStatus("PENDING"); // Re-moderation required
-
-        return toDTO(reviewRepository.save(review));
+        review.setStatus("PENDING");
+        ReviewDTO result = toDTO(reviewRepository.save(review));
+        log.info("Рецензия обновлена, отправлена на повторную модерацию: id={}", reviewId);
+        return result;
     }
 
     @Transactional
@@ -76,12 +82,15 @@ public class ReviewService {
         Review review = findById(reviewId);
 
         if (!isModerator && !review.getUser().getId().equals(userId)) {
+            log.warn("Попытка удалить чужую рецензию: reviewId={}, requestUserId={}", reviewId, userId);
             throw AppException.forbidden("Вы не можете удалить чужую рецензию");
         }
 
         reviewRepository.delete(review);
+        log.info("Рецензия удалена: id={}, isModerator={}", reviewId, isModerator);
     }
 
+    @Transactional(readOnly = true)
     public Page<ReviewDTO> getBookReviews(UUID bookId, Pageable pageable) {
         return reviewRepository.findByBookIdAndStatus(bookId, "APPROVED", pageable)
                 .map(r -> {
@@ -92,10 +101,12 @@ public class ReviewService {
                 });
     }
 
+    @Transactional(readOnly = true)
     public Page<ReviewDTO> getUserReviews(UUID userId, Pageable pageable) {
         return reviewRepository.findByUserId(userId, pageable).map(this::toDTO);
     }
 
+    @Transactional(readOnly = true)
     public Page<ReviewDTO> getPendingReviews(Pageable pageable) {
         return reviewRepository.findByStatus("PENDING", pageable).map(this::toDTO);
     }
@@ -104,14 +115,18 @@ public class ReviewService {
     public ReviewDTO approveReview(UUID reviewId) {
         Review review = findById(reviewId);
         review.setStatus("APPROVED");
-        return toDTO(reviewRepository.save(review));
+        ReviewDTO result = toDTO(reviewRepository.save(review));
+        log.info("Рецензия одобрена модератором: id={}", reviewId);
+        return result;
     }
 
     @Transactional
     public ReviewDTO rejectReview(UUID reviewId) {
         Review review = findById(reviewId);
         review.setStatus("REJECTED");
-        return toDTO(reviewRepository.save(review));
+        ReviewDTO result = toDTO(reviewRepository.save(review));
+        log.info("Рецензия отклонена модератором: id={}", reviewId);
+        return result;
     }
 
     @Transactional

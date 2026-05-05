@@ -28,7 +28,10 @@
       "Bash(docker ps:*)",
       "Bash(python -c \"import sys,json; h=json.load\\(sys.stdin\\); print\\(''''Status:'''', h[''''Status'''']\\); [print\\(l[''''Output''''].strip\\(\\)\\) for l in h[''''Log''''][-2:]]\")",
       "Bash(curl -s http://localhost:8088/api/health)",
-      "Bash(curl -s http://localhost:3000)"
+      "Bash(curl -s http://localhost:3000)",
+      "Bash(ls C:/Users/Lenovo/IdeaProjects/bookshelf/.env*)",
+      "Bash(Get-ChildItem -Recurse -Directory)",
+      "Bash(Select-Object -First 50 FullName)"
     ]
   }
 }

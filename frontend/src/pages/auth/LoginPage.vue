@@ -2,6 +2,7 @@
 import { reactive, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import AppHeader from '../../layouts/components/AppHeader.vue';
+import { api } from '../../api.js';
 
 const AUTH_TOKEN_KEY = 'bookshelf_auth_token';
 const AUTH_ROLE_KEY = 'bookshelf_auth_role';
@@ -23,18 +24,21 @@ async function submit() {
   }
 
   loading.value = true;
-  await new Promise(r => setTimeout(r, 300));
-  loading.value = false;
-
-  // Пока без API: простая проверка роли администратора
-  // admin/admin -> роль admin, иначе user
-  const role = form.login.trim() === 'admin' && form.password === 'admin' ? 'admin' : 'user';
-
-  localStorage.setItem(AUTH_TOKEN_KEY, `token_${Date.now()}`);
-  localStorage.setItem('bookshelf_auth_login', form.login.trim());
-  localStorage.setItem(AUTH_ROLE_KEY, role);
-
-  router.push(role === 'admin' ? '/admin' : '/');
+  try {
+    const data = await api.post('/auth/login', {
+      login: form.login.trim(),
+      password: form.password,
+    });
+    localStorage.setItem(AUTH_TOKEN_KEY, data.token);
+    localStorage.setItem(AUTH_ROLE_KEY, data.role);
+    localStorage.setItem('bookshelf_auth_login', data.user.login);
+    localStorage.setItem('bookshelf_profile', JSON.stringify(data.user));
+    router.push(data.role === 'admin' ? '/admin' : '/');
+  } catch (e) {
+    error.value = e.message || 'Неверный логин или пароль';
+  } finally {
+    loading.value = false;
+  }
 }
 </script>
 
