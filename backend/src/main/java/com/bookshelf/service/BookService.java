@@ -9,7 +9,6 @@ import com.bookshelf.repository.ReviewRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -25,15 +24,20 @@ import java.util.stream.Collectors;
 @Slf4j
 public class BookService {
 
+    public static final String STATUS_ACTIVE = "ACTIVE";
+    public static final String STATUS_ARCHIVED = "ARCHIVED";
+
     private final BookRepository bookRepository;
     private final ReviewRepository reviewRepository;
 
     @Transactional(readOnly = true)
-    public Page<BookDTO> getAllBooks(Pageable pageable) {
-        log.debug("Запрос всех книг: page={}, size={}", pageable.getPageNumber(), pageable.getPageSize());
-        Page<BookDTO> result = bookRepository.findAll(pageable).map(this::toDTO);
-        log.debug("Книги получены: total={}", result.getTotalElements());
-        return result;
+    public Page<BookDTO> getAllBooks(boolean includeArchived, Pageable pageable) {
+        log.debug("Запрос всех книг: includeArchived={}, page={}, size={}",
+                includeArchived, pageable.getPageNumber(), pageable.getPageSize());
+        Page<Book> page = includeArchived
+                ? bookRepository.findAll(pageable)
+                : bookRepository.findByStatus(STATUS_ACTIVE, pageable);
+        return page.map(this::toDTO);
     }
 
     @Transactional(readOnly = true)
@@ -41,42 +45,43 @@ public class BookService {
         log.debug("Поиск книги по id={}", id);
         Book book = findById(id);
         Double avgRating = reviewRepository.getAverageRatingByBookId(id);
-        log.debug("Книга найдена: title='{}', avgRating={}", book.getTitle(), avgRating);
         BookDTO dto = toDTO(book);
         dto.setAverageRating(avgRating);
         return dto;
     }
 
     @Transactional(readOnly = true)
-    public Page<BookDTO> searchBooks(String query, Pageable pageable) {
+    public Page<BookDTO> searchBooks(String query, boolean includeArchived, Pageable pageable) {
         if (!StringUtils.hasText(query)) {
-            return getAllBooks(pageable);
+            return getAllBooks(includeArchived, pageable);
         }
 
         log.debug("Полнотекстовый поиск книг: query='{}'", query);
         Page<Book> results = bookRepository.searchByText(query, pageable);
         if (results.getTotalElements() == 0) {
-            log.debug("Полнотекстовый поиск не дал результатов — переход на ILIKE: query='{}'", query);
             results = bookRepository.searchByTitleOrAuthor(query, pageable);
         }
-        log.debug("Поиск книг завершён: query='{}', found={}", query, results.getTotalElements());
+        if (!includeArchived) {
+            // Filter post-search to keep query simple. The result page is bounded by `size`.
+            List<BookDTO> active = results.getContent().stream()
+                    .filter(b -> STATUS_ACTIVE.equals(b.getStatus()))
+                    .map(this::toDTO)
+                    .collect(Collectors.toList());
+            return new org.springframework.data.domain.PageImpl<>(active, pageable, active.size());
+        }
         return results.map(this::toDTO);
     }
 
     @Transactional(readOnly = true)
     public List<BookDTO> getBooksByIds(List<UUID> ids) {
         if (ids == null || ids.isEmpty()) return Collections.emptyList();
-        log.debug("Запрос книг по id-списку: count={}", ids.size());
-        List<BookDTO> result = bookRepository.findByIdIn(ids).stream()
+        return bookRepository.findByIdIn(ids).stream()
                 .map(this::toDTO)
                 .collect(Collectors.toList());
-        log.debug("Книги по id-списку получены: requested={}, found={}", ids.size(), result.size());
-        return result;
     }
 
     @Transactional
     public BookDTO createBook(CreateBookDTO dto) {
-        log.debug("Создание книги: title='{}', author='{}'", dto.getTitle(), dto.getAuthor());
         Book book = Book.builder()
                 .title(dto.getTitle())
                 .author(dto.getAuthor())
@@ -90,15 +95,15 @@ public class BookService {
                 .publisher(dto.getPublisher())
                 .publishYear(dto.getPublishYear())
                 .isbn(dto.getIsbn())
+                .status(STATUS_ACTIVE)
                 .build();
         BookDTO result = toDTO(bookRepository.save(book));
-        log.info("Книга сохранена: id={}, title='{}'", result.getId(), result.getTitle());
+        log.info("Книга создана: id={}, title='{}'", result.getId(), result.getTitle());
         return result;
     }
 
     @Transactional
     public BookDTO updateBook(UUID id, CreateBookDTO dto) {
-        log.debug("Обновление книги: id={}", id);
         Book book = findById(id);
         if (dto.getTitle() != null) book.setTitle(dto.getTitle());
         if (dto.getAuthor() != null) book.setAuthor(dto.getAuthor());
@@ -115,6 +120,17 @@ public class BookService {
         BookDTO result = toDTO(bookRepository.save(book));
         log.info("Книга обновлена: id={}, title='{}'", result.getId(), result.getTitle());
         return result;
+    }
+
+    @Transactional
+    public BookDTO setStatus(UUID id, String status) {
+        if (!STATUS_ACTIVE.equals(status) && !STATUS_ARCHIVED.equals(status)) {
+            throw AppException.badRequest("Недопустимый статус");
+        }
+        Book book = findById(id);
+        book.setStatus(status);
+        log.info("Статус книги изменён: id={}, status={}", id, status);
+        return toDTO(bookRepository.save(book));
     }
 
     @Transactional
@@ -147,6 +163,7 @@ public class BookService {
                 .publisher(book.getPublisher())
                 .publishYear(book.getPublishYear())
                 .isbn(book.getIsbn())
+                .status(book.getStatus())
                 .build();
     }
 }

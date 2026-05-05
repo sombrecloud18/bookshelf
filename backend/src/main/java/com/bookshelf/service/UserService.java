@@ -3,6 +3,7 @@ package com.bookshelf.service;
 import com.bookshelf.dto.auth.AuthResponseDTO;
 import com.bookshelf.dto.auth.LoginRequestDTO;
 import com.bookshelf.dto.auth.RegisterRequestDTO;
+import com.bookshelf.dto.user.ChangeLoginDTO;
 import com.bookshelf.dto.user.ChangePasswordDTO;
 import com.bookshelf.dto.user.UpdateProfileDTO;
 import com.bookshelf.dto.user.UserProfileDTO;
@@ -41,6 +42,9 @@ public class UserService {
             throw AppException.conflict("Пользователь с таким email уже существует");
         }
 
+        String userType = normalizeUserType(dto.getUserType());
+        validateUserTypeFields(userType, dto);
+
         User user = User.builder()
                 .login(dto.getLogin())
                 .email(dto.getEmail())
@@ -49,15 +53,18 @@ public class UserService {
                 .lastName(dto.getLastName())
                 .patronymic(dto.getPatronymic())
                 .faculty(dto.getFaculty())
-                .specialty(dto.getSpecialty())
-                .course(dto.getCourse())
+                .specialty("STUDENT".equals(userType) ? dto.getSpecialty() : null)
+                .course("STUDENT".equals(userType) ? dto.getCourse() : null)
                 .phoneNumber(dto.getPhoneNumber())
                 .avatarUrl(dto.getAvatarUrl())
                 .role("USER")
+                .userType(userType)
+                .department("TEACHER".equals(userType) ? dto.getDepartment() : null)
+                .position("TEACHER".equals(userType) ? dto.getPosition() : null)
                 .build();
 
         user = userRepository.save(user);
-        log.info("Новый пользователь сохранён в БД: id={}, login={}", user.getId(), user.getLogin());
+        log.info("Новый пользователь сохранён в БД: id={}, login={}, type={}", user.getId(), user.getLogin(), userType);
         String token = jwtTokenProvider.generateToken(user.getId(), user.getRole());
 
         return AuthResponseDTO.builder()
@@ -108,10 +115,18 @@ public class UserService {
         if (dto.getLastName() != null) user.setLastName(dto.getLastName());
         if (dto.getPatronymic() != null) user.setPatronymic(dto.getPatronymic());
         if (dto.getFaculty() != null) user.setFaculty(dto.getFaculty());
-        if (dto.getSpecialty() != null) user.setSpecialty(dto.getSpecialty());
-        if (dto.getCourse() != null) user.setCourse(dto.getCourse());
         if (dto.getPhoneNumber() != null) user.setPhoneNumber(dto.getPhoneNumber());
         if (dto.getAvatarUrl() != null) user.setAvatarUrl(dto.getAvatarUrl());
+
+        // Type-specific fields stay nullable for the other type.
+        if ("STUDENT".equals(user.getUserType())) {
+            if (dto.getSpecialty() != null) user.setSpecialty(dto.getSpecialty());
+            if (dto.getCourse() != null) user.setCourse(dto.getCourse());
+        } else if ("TEACHER".equals(user.getUserType())) {
+            if (dto.getDepartment() != null) user.setDepartment(dto.getDepartment());
+            if (dto.getPosition() != null) user.setPosition(dto.getPosition());
+        }
+
         if (dto.getEmail() != null) {
             if (!dto.getEmail().equals(user.getEmail()) && userRepository.existsByEmail(dto.getEmail())) {
                 throw AppException.conflict("Пользователь с таким email уже существует");
@@ -137,6 +152,23 @@ public class UserService {
         }
         user.setPasswordHash(passwordEncoder.encode(dto.getNewPassword()));
         userRepository.save(user);
+    }
+
+    @Transactional
+    public UserProfileDTO changeLogin(UUID userId, ChangeLoginDTO dto) {
+        User user = findById(userId);
+        if (!passwordEncoder.matches(dto.getCurrentPassword(), user.getPasswordHash())) {
+            throw AppException.badRequest("Текущий пароль неверен");
+        }
+        if (dto.getNewLogin().equals(user.getLogin())) {
+            return toProfileDTO(user);
+        }
+        if (userRepository.existsByLogin(dto.getNewLogin())) {
+            throw AppException.conflict("Логин уже занят");
+        }
+        user.setLogin(dto.getNewLogin());
+        log.info("Логин изменён: userId={}, newLogin={}", userId, dto.getNewLogin());
+        return toProfileDTO(userRepository.save(user));
     }
 
     @Transactional
@@ -180,6 +212,9 @@ public class UserService {
                 .phoneNumber(user.getPhoneNumber())
                 .avatarUrl(user.getAvatarUrl())
                 .role(mapRole(user.getRole()))
+                .userType(user.getUserType())
+                .department(user.getDepartment())
+                .position(user.getPosition())
                 .fullName(fullName)
                 .studyInfo(studyInfo)
                 .isBlocked(user.isBlocked())
@@ -196,13 +231,59 @@ public class UserService {
 
     private String buildStudyInfo(User user) {
         StringBuilder sb = new StringBuilder();
-        if (user.getFaculty() != null) sb.append(user.getFaculty());
-        if (user.getSpecialty() != null) sb.append(", ").append(user.getSpecialty());
-        if (user.getCourse() != null) sb.append(", ").append(user.getCourse());
+        if ("TEACHER".equals(user.getUserType())) {
+            if (user.getFaculty() != null) sb.append(user.getFaculty());
+            if (user.getDepartment() != null) {
+                if (sb.length() > 0) sb.append(", ");
+                sb.append(user.getDepartment());
+            }
+            if (user.getPosition() != null) {
+                if (sb.length() > 0) sb.append(", ");
+                sb.append(user.getPosition());
+            }
+        } else {
+            if (user.getFaculty() != null) sb.append(user.getFaculty());
+            if (user.getSpecialty() != null) {
+                if (sb.length() > 0) sb.append(", ");
+                sb.append(user.getSpecialty());
+            }
+            if (user.getCourse() != null) {
+                if (sb.length() > 0) sb.append(", ");
+                sb.append(user.getCourse());
+            }
+        }
         return sb.toString();
     }
 
     private String mapRole(String role) {
         return "MODERATOR".equals(role) ? "admin" : "user";
+    }
+
+    private String normalizeUserType(String userType) {
+        if (userType == null || userType.isBlank()) return "STUDENT";
+        String upper = userType.trim().toUpperCase();
+        if (!"STUDENT".equals(upper) && !"TEACHER".equals(upper)) {
+            throw AppException.badRequest("Недопустимый тип пользователя");
+        }
+        return upper;
+    }
+
+    private void validateUserTypeFields(String userType, RegisterRequestDTO dto) {
+        if ("TEACHER".equals(userType)) {
+            if (isBlank(dto.getDepartment())) {
+                throw AppException.badRequest("Для преподавателя обязательна кафедра");
+            }
+            if (isBlank(dto.getPosition())) {
+                throw AppException.badRequest("Для преподавателя обязательна должность");
+            }
+        } else { // STUDENT
+            if (isBlank(dto.getFaculty()) || isBlank(dto.getSpecialty()) || isBlank(dto.getCourse())) {
+                throw AppException.badRequest("Заполните факультет, специальность и курс");
+            }
+        }
+    }
+
+    private boolean isBlank(String s) {
+        return s == null || s.trim().isEmpty();
     }
 }

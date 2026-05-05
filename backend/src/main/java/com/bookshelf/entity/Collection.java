@@ -38,6 +38,9 @@ public class Collection {
     @Column(nullable = false, length = 20)
     private String status = "DRAFT";
 
+    @Column(name = "moderator_comment", columnDefinition = "TEXT")
+    private String moderatorComment;
+
     @OneToMany(mappedBy = "collection", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.EAGER)
     @OrderBy("position ASC")
     @Builder.Default

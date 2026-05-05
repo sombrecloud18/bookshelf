@@ -17,6 +17,8 @@ import ModerationCollectionsPage from '../pages/admin/ModerationCollectionsPage.
 import ModerationReviewsPage from '../pages/admin/ModerationReviewsPage.vue';
 import EventsPage from '../pages/admin/EventsPage.vue';
 import ModerationSubjectCollectionsPage from '../pages/admin/ModerationSubjectCollectionsPage.vue';
+import AdminBooksPage from '../pages/admin/BooksPage.vue';
+import AdminSubjectsPage from '../pages/admin/SubjectsPage.vue';
 
 const AUTH_TOKEN_KEY = 'bookshelf_auth_token';
 const AUTH_ROLE_KEY = 'bookshelf_auth_role';
@@ -75,6 +77,8 @@ const routes = [
       { path: 'reviews', name: 'admin-reviews-moderation', component: ModerationReviewsPage },
       { path: 'events', name: 'admin-events', component: EventsPage },
       { path: 'subject-collections', name: 'admin-subject-collections', component: ModerationSubjectCollectionsPage },
+      { path: 'books', name: 'admin-books', component: AdminBooksPage },
+      { path: 'subjects', name: 'admin-subjects', component: AdminSubjectsPage },
     ],
   },
   {

@@ -15,6 +15,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -28,12 +29,11 @@ public class ReviewService {
     private final UserRepository userRepository;
     private final CommentRepository commentRepository;
     private final UserActivityRepository userActivityRepository;
+    private final LikeService likeService;
 
     @Transactional
     public ReviewDTO createReview(UUID userId, CreateReviewDTO dto) {
-        log.debug("Создание рецензии: userId={}, bookId={}", userId, dto.getBookId());
         if (reviewRepository.existsByBookIdAndUserId(dto.getBookId(), userId)) {
-            log.warn("Дублирующая рецензия: userId={}, bookId={}", userId, dto.getBookId());
             throw AppException.conflict("Вы уже написали рецензию на эту книгу");
         }
 
@@ -48,16 +48,16 @@ public class ReviewService {
                 .rating(dto.getRating())
                 .text(dto.getText())
                 .status("PENDING")
-                .likes(0)
                 .build();
 
         review = reviewRepository.save(review);
-        log.info("Рецензия сохранена (ожидает модерации): id={}, bookId={}, userId={}", review.getId(), dto.getBookId(), userId);
+        log.info("Рецензия сохранена (ожидает модерации): id={}, bookId={}, userId={}",
+                review.getId(), dto.getBookId(), userId);
 
         userActivityRepository.save(UserActivity.builder()
                 .user(user).book(book).activityType("REVIEW").build());
 
-        return toDTO(review);
+        return toDTO(review, userId);
     }
 
     @Transactional
@@ -65,16 +65,13 @@ public class ReviewService {
         Review review = findById(reviewId);
 
         if (!review.getUser().getId().equals(userId)) {
-            log.warn("Попытка редактировать чужую рецензию: reviewId={}, requestUserId={}", reviewId, userId);
             throw AppException.forbidden("Вы не можете редактировать чужую рецензию");
         }
 
         review.setRating(dto.getRating());
         review.setText(dto.getText());
         review.setStatus("PENDING");
-        ReviewDTO result = toDTO(reviewRepository.save(review));
-        log.info("Рецензия обновлена, отправлена на повторную модерацию: id={}", reviewId);
-        return result;
+        return toDTO(reviewRepository.save(review), userId);
     }
 
     @Transactional
@@ -82,40 +79,53 @@ public class ReviewService {
         Review review = findById(reviewId);
 
         if (!isModerator && !review.getUser().getId().equals(userId)) {
-            log.warn("Попытка удалить чужую рецензию: reviewId={}, requestUserId={}", reviewId, userId);
             throw AppException.forbidden("Вы не можете удалить чужую рецензию");
         }
+
+        // Clean up dangling likes (the polymorphic table has no FK).
+        likeService.deleteFor(LikeService.TARGET_REVIEW, reviewId);
+        commentRepository.findByReviewIdOrderByCreatedAtAsc(reviewId)
+                .forEach(c -> likeService.deleteFor(LikeService.TARGET_COMMENT, c.getId()));
 
         reviewRepository.delete(review);
         log.info("Рецензия удалена: id={}, isModerator={}", reviewId, isModerator);
     }
 
     @Transactional(readOnly = true)
-    public Page<ReviewDTO> getBookReviews(UUID bookId, Pageable pageable) {
-        return reviewRepository.findByBookIdAndStatus(bookId, "APPROVED", pageable)
-                .map(r -> {
-                    ReviewDTO dto = toDTO(r);
-                    List<Comment> comments = commentRepository.findByReviewIdOrderByCreatedAtAsc(r.getId());
-                    dto.setComments(comments.stream().map(this::toCommentDTO).collect(Collectors.toList()));
-                    return dto;
-                });
+    public Page<ReviewDTO> getBookReviews(UUID bookId, UUID viewerId, Pageable pageable) {
+        Page<Review> reviews = reviewRepository.findByBookIdAndStatus(bookId, "APPROVED", pageable);
+        Set<UUID> likedReviews = likeService.findLikedIds(viewerId, LikeService.TARGET_REVIEW,
+                reviews.stream().map(Review::getId).collect(Collectors.toList()));
+
+        return reviews.map(r -> {
+            ReviewDTO dto = toDTO(r, likedReviews.contains(r.getId()),
+                    likeService.count(LikeService.TARGET_REVIEW, r.getId()));
+            List<Comment> comments = commentRepository.findByReviewIdOrderByCreatedAtAsc(r.getId());
+            Set<UUID> likedComments = likeService.findLikedIds(viewerId, LikeService.TARGET_COMMENT,
+                    comments.stream().map(Comment::getId).collect(Collectors.toList()));
+            dto.setComments(comments.stream()
+                    .map(c -> toCommentDTO(c, likedComments.contains(c.getId()),
+                            likeService.count(LikeService.TARGET_COMMENT, c.getId())))
+                    .collect(Collectors.toList()));
+            return dto;
+        });
     }
 
     @Transactional(readOnly = true)
     public Page<ReviewDTO> getUserReviews(UUID userId, Pageable pageable) {
-        return reviewRepository.findByUserId(userId, pageable).map(this::toDTO);
+        return reviewRepository.findByUserId(userId, pageable).map(r -> toDTO(r, userId));
     }
 
     @Transactional(readOnly = true)
     public Page<ReviewDTO> getPendingReviews(Pageable pageable) {
-        return reviewRepository.findByStatus("PENDING", pageable).map(this::toDTO);
+        return reviewRepository.findByStatus("PENDING", pageable).map(r -> toDTO(r, null));
     }
 
     @Transactional
     public ReviewDTO approveReview(UUID reviewId) {
         Review review = findById(reviewId);
         review.setStatus("APPROVED");
-        ReviewDTO result = toDTO(reviewRepository.save(review));
+        ReviewDTO result = toDTO(reviewRepository.save(review), null);
         log.info("Рецензия одобрена модератором: id={}", reviewId);
         return result;
     }
@@ -124,16 +134,9 @@ public class ReviewService {
     public ReviewDTO rejectReview(UUID reviewId) {
         Review review = findById(reviewId);
         review.setStatus("REJECTED");
-        ReviewDTO result = toDTO(reviewRepository.save(review));
+        ReviewDTO result = toDTO(reviewRepository.save(review), null);
         log.info("Рецензия отклонена модератором: id={}", reviewId);
         return result;
-    }
-
-    @Transactional
-    public void likeReview(UUID reviewId) {
-        Review review = findById(reviewId);
-        review.setLikes(review.getLikes() + 1);
-        reviewRepository.save(review);
     }
 
     private Review findById(UUID id) {
@@ -141,7 +144,14 @@ public class ReviewService {
                 .orElseThrow(() -> AppException.notFound("Рецензия не найдена"));
     }
 
-    public ReviewDTO toDTO(Review r) {
+    public ReviewDTO toDTO(Review r, UUID viewerId) {
+        long count = likeService.count(LikeService.TARGET_REVIEW, r.getId());
+        boolean liked = viewerId != null
+                && !likeService.findLikedIds(viewerId, LikeService.TARGET_REVIEW, List.of(r.getId())).isEmpty();
+        return toDTO(r, liked, count);
+    }
+
+    public ReviewDTO toDTO(Review r, boolean liked, long likes) {
         return ReviewDTO.builder()
                 .id(r.getId())
                 .bookId(r.getBook().getId())
@@ -155,21 +165,23 @@ public class ReviewService {
                 .rating(r.getRating())
                 .text(r.getText())
                 .status(r.getStatus())
-                .likes(r.getLikes())
+                .likes(likes)
+                .liked(liked)
                 .createdAt(r.getCreatedAt())
                 .reviewAuthor(r.getUser().getLogin())
                 .reviewAuthorName(buildFullName(r.getUser()))
                 .build();
     }
 
-    private CommentDTO toCommentDTO(Comment c) {
+    private CommentDTO toCommentDTO(Comment c, boolean liked, long likes) {
         return CommentDTO.builder()
                 .id(c.getId())
                 .userId(c.getUser().getId())
                 .userName(c.getUser().getLogin())
                 .userAvatar(c.getUser().getAvatarUrl())
                 .text(c.getText())
-                .likes(c.getLikes())
+                .likes(likes)
+                .liked(liked)
                 .createdAt(c.getCreatedAt())
                 .build();
     }

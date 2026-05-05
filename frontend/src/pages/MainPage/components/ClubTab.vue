@@ -1,70 +1,90 @@
 <script setup>
-import { computed, ref } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { api } from '../../../api.js';
 
 const props = defineProps({
-  items: { type: Array, default: () => [] }, // [{ id, title, text }]
+  items: { type: Array, default: () => [] },
 });
 
-const participants = ref(
-  Object.fromEntries(
-    props.items.map(i => [
-      i.id,
-      {
-        count: typeof i.participantsCount === 'number' ? i.participantsCount : 0,
-        status: null, // 'going' | 'not_going' | null
-      },
-    ]),
-  ),
-);
+// Local mirror of the participant counts and registration state, keyed by event id.
+const stateById = ref({});
+
+watch(() => props.items, (items) => {
+  for (const item of items) {
+    if (!stateById.value[item.id]) {
+      stateById.value[item.id] = {
+        count: typeof item.participantsCount === 'number' ? item.participantsCount : 0,
+        max: item.maxParticipants ?? null,
+        registered: false,
+      };
+    } else {
+      stateById.value[item.id].count = typeof item.participantsCount === 'number'
+        ? item.participantsCount
+        : stateById.value[item.id].count;
+      stateById.value[item.id].max = item.maxParticipants ?? stateById.value[item.id].max;
+    }
+  }
+}, { immediate: true });
 
 const open = ref(false);
 const selectedId = ref(null);
 const loadingRegistration = ref(false);
+const errorMessage = ref(null);
 
 const selectedItem = computed(() => props.items.find(i => i.id === selectedId.value) || null);
-const selectedState = computed(() => (selectedId.value ? participants.value[selectedId.value] : null));
+const selectedState = computed(() => (selectedId.value ? stateById.value[selectedId.value] : null));
+const isFull = computed(() => {
+  const s = selectedState.value;
+  if (!s || s.max == null) return false;
+  return s.count >= s.max;
+});
+
+async function refreshState(eventId) {
+  try {
+    const [event, regResp] = await Promise.all([
+      api.get(`/events/${eventId}`),
+      api.get(`/events/${eventId}/registered`).catch(() => ({ registered: false })),
+    ]);
+    stateById.value[eventId] = {
+      count: event?.currentParticipants ?? 0,
+      max: event?.maxParticipants ?? null,
+      registered: !!regResp?.registered,
+    };
+  } catch (e) {
+    console.error('Не удалось обновить данные мероприятия:', e);
+  }
+}
 
 async function openDetails(id) {
   selectedId.value = id;
   open.value = true;
-  try {
-    const data = await api.get(`/events/${id}/registered`);
-    if (participants.value[id]) {
-      participants.value[id].status = data.registered ? 'going' : null;
-    }
-  } catch {
-    // ignore — user may not be authenticated
-  }
+  errorMessage.value = null;
+  await refreshState(id);
 }
 
 async function confirmGoing() {
   if (!selectedId.value || loadingRegistration.value) return;
-  const st = participants.value[selectedId.value];
-  if (!st || st.status === 'going') return;
+  errorMessage.value = null;
   loadingRegistration.value = true;
   try {
     await api.post(`/events/${selectedId.value}/register`);
-    if (st.status !== 'going') st.count += 1;
-    st.status = 'going';
+    await refreshState(selectedId.value);
   } catch (e) {
-    console.error('Ошибка регистрации:', e);
+    errorMessage.value = e.message || 'Не удалось зарегистрироваться';
   } finally {
     loadingRegistration.value = false;
   }
 }
 
-async function confirmNotGoing() {
+async function cancelGoing() {
   if (!selectedId.value || loadingRegistration.value) return;
-  const st = participants.value[selectedId.value];
-  if (!st || st.status === 'not_going') return;
+  errorMessage.value = null;
   loadingRegistration.value = true;
   try {
     await api.delete(`/events/${selectedId.value}/register`);
-    if (st.status === 'going') st.count = Math.max(0, st.count - 1);
-    st.status = 'not_going';
+    await refreshState(selectedId.value);
   } catch (e) {
-    console.error('Ошибка отмены регистрации:', e);
+    errorMessage.value = e.message || 'Не удалось отменить участие';
   } finally {
     loadingRegistration.value = false;
   }
@@ -81,14 +101,17 @@ async function confirmNotGoing() {
     >
       <h3 class="text-lg font-semibold text-black">{{ i.title }}</h3>
       <p class="mt-2 text-sm text-gray-700">{{ i.text }}</p>
-      <div class="mt-3 text-xs text-gray-500">Участников: {{ participants[i.id]?.count ?? 0 }}</div>
+      <div class="mt-3 text-xs text-gray-500">
+        Участников: {{ stateById[i.id]?.count ?? 0 }}{{ i.maxParticipants ? ` / ${i.maxParticipants}` : '' }}
+      </div>
+      <div v-if="i.date" class="mt-1 text-xs text-gray-500">📅 {{ i.date }}<span v-if="i.time"> • ⏰ {{ i.time }}</span></div>
       <div class="mt-4 flex justify-end">
         <UButton variant="outline" class="rounded-xl" @click="openDetails(i.id)">Подробнее</UButton>
       </div>
     </UCard>
   </div>
 
-  <UModal v-model:open="open" title="Книжный клуб">
+  <UModal v-model:open="open" title="Книжный клуб" class="z-100">
     <template #body>
       <div v-if="selectedItem" class="space-y-3">
         <div class="flex items-start justify-between gap-4">
@@ -98,20 +121,57 @@ async function confirmNotGoing() {
           </div>
         </div>
 
-        <div class="text-sm text-gray-800">
+        <div class="grid grid-cols-2 gap-3 text-sm text-gray-700">
+          <div v-if="selectedItem.date">
+            <span class="font-semibold text-black">Дата:</span> {{ selectedItem.date }}
+          </div>
+          <div v-if="selectedItem.time">
+            <span class="font-semibold text-black">Время:</span> {{ selectedItem.time }}
+          </div>
+          <div v-if="selectedItem.location">
+            <span class="font-semibold text-black">Место:</span> {{ selectedItem.location }}
+          </div>
+          <div v-if="selectedItem.organizer">
+            <span class="font-semibold text-black">Организатор:</span> {{ selectedItem.organizer }}
+          </div>
+        </div>
+
+        <div class="text-sm text-gray-800 mt-2">
           <span class="font-semibold text-black">Участников: </span>
           <span>{{ selectedState?.count ?? 0 }}</span>
+          <span v-if="selectedState?.max != null">
+            / {{ selectedState.max }}
+            <span v-if="isFull && !selectedState.registered" class="ml-2 text-red-500 font-medium">(мест нет)</span>
+          </span>
         </div>
+
+        <UAlert v-if="errorMessage" color="error" variant="soft" :description="errorMessage" />
       </div>
     </template>
 
     <template #footer>
       <div class="flex items-center justify-between gap-3 w-full">
         <UButton variant="outline" class="rounded-xl" @click="open = false">Закрыть</UButton>
-        <div class="flex gap-3">
-          <UButton color="primary" class="rounded-xl" :loading="loadingRegistration" @click="confirmGoing">Подтвердить участие</UButton>
-          <UButton color="red" variant="soft" class="rounded-xl" :loading="loadingRegistration" @click="confirmNotGoing">Я не приду</UButton>
-        </div>
+        <UButton
+          v-if="selectedState?.registered"
+          color="error"
+          variant="soft"
+          class="rounded-xl"
+          :loading="loadingRegistration"
+          @click="cancelGoing"
+        >
+          Я не приду
+        </UButton>
+        <UButton
+          v-else
+          color="primary"
+          class="rounded-xl"
+          :loading="loadingRegistration"
+          :disabled="isFull"
+          @click="confirmGoing"
+        >
+          {{ isFull ? 'Мест нет' : 'Подтвердить участие' }}
+        </UButton>
       </div>
     </template>
   </UModal>

@@ -54,7 +54,10 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.GET,  "/api/events/**").permitAll()
                 .requestMatchers(HttpMethod.GET,  "/api/recommendations/similar/**").permitAll()
                 .requestMatchers(HttpMethod.GET,  "/api/subject-collections").permitAll()
+                .requestMatchers(HttpMethod.GET,  "/api/subjects").permitAll()
                 .requestMatchers(HttpMethod.GET,  "/api/reviews/book/**").permitAll()
+                // Static files (avatars, covers) and WebSocket handshake
+                .requestMatchers("/files/**", "/ws/**").permitAll()
                 // Moderator only
                 .requestMatchers("/api/admin/**").hasRole("MODERATOR")
                 .requestMatchers(HttpMethod.GET,  "/api/reviews/pending").hasRole("MODERATOR")
@@ -72,9 +75,15 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.POST, "/api/books").hasRole("MODERATOR")
                 .requestMatchers(HttpMethod.PUT,  "/api/books/**").hasRole("MODERATOR")
                 .requestMatchers(HttpMethod.DELETE, "/api/books/**").hasRole("MODERATOR")
+                .requestMatchers(HttpMethod.POST, "/api/books/*/archive").hasRole("MODERATOR")
+                .requestMatchers(HttpMethod.POST, "/api/books/*/restore").hasRole("MODERATOR")
                 .requestMatchers(HttpMethod.POST, "/api/users/*/block").hasRole("MODERATOR")
                 .requestMatchers(HttpMethod.POST, "/api/users/*/unblock").hasRole("MODERATOR")
                 .requestMatchers(HttpMethod.GET,  "/api/admin/users").hasRole("MODERATOR")
+                .requestMatchers(HttpMethod.POST, "/api/subjects").hasRole("MODERATOR")
+                .requestMatchers(HttpMethod.PUT,  "/api/subjects/**").hasRole("MODERATOR")
+                .requestMatchers(HttpMethod.DELETE, "/api/subjects/**").hasRole("MODERATOR")
+                .requestMatchers(HttpMethod.POST, "/api/files/covers").hasRole("MODERATOR")
                 // All others require authentication
                 .anyRequest().authenticated()
             )

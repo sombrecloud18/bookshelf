@@ -17,6 +17,7 @@ public class CollectionDTO {
     private String genre;
     private String description;
     private String status;
+    private String moderatorComment;
     private List<UUID> bookIds;
     private String author;
     private String authorName;

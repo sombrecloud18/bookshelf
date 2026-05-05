@@ -11,6 +11,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -23,6 +24,7 @@ public class CommentService {
     private final ReviewRepository reviewRepository;
     private final CollectionRepository collectionRepository;
     private final UserRepository userRepository;
+    private final LikeService likeService;
 
     @Transactional
     public CommentDTO addCommentToReview(UUID userId, UUID reviewId, CreateCommentDTO dto) {
@@ -35,10 +37,9 @@ public class CommentService {
                 .review(review)
                 .user(user)
                 .text(dto.getText())
-                .likes(0)
                 .build();
 
-        return toDTO(commentRepository.save(comment));
+        return toDTO(commentRepository.save(comment), userId);
     }
 
     @Transactional
@@ -52,10 +53,9 @@ public class CommentService {
                 .collection(collection)
                 .user(user)
                 .text(dto.getText())
-                .likes(0)
                 .build();
 
-        return toDTO(commentRepository.save(comment));
+        return toDTO(commentRepository.save(comment), userId);
     }
 
     @Transactional
@@ -67,7 +67,7 @@ public class CommentService {
         }
 
         comment.setText(dto.getText());
-        return toDTO(commentRepository.save(comment));
+        return toDTO(commentRepository.save(comment), userId);
     }
 
     @Transactional
@@ -78,26 +78,30 @@ public class CommentService {
             throw AppException.forbidden("Вы не можете удалить чужой комментарий");
         }
 
+        likeService.deleteFor(LikeService.TARGET_COMMENT, commentId);
         commentRepository.delete(comment);
     }
 
     @Transactional(readOnly = true)
-    public List<CommentDTO> getCommentsForReview(UUID reviewId) {
-        return commentRepository.findByReviewIdOrderByCreatedAtAsc(reviewId)
-                .stream().map(this::toDTO).collect(Collectors.toList());
+    public List<CommentDTO> getCommentsForReview(UUID reviewId, UUID viewerId) {
+        List<Comment> comments = commentRepository.findByReviewIdOrderByCreatedAtAsc(reviewId);
+        Set<UUID> likedIds = likeService.findLikedIds(viewerId, LikeService.TARGET_COMMENT,
+                comments.stream().map(Comment::getId).collect(Collectors.toList()));
+        return comments.stream()
+                .map(c -> toDTO(c, likedIds.contains(c.getId()),
+                        likeService.count(LikeService.TARGET_COMMENT, c.getId())))
+                .collect(Collectors.toList());
     }
 
     @Transactional(readOnly = true)
-    public List<CommentDTO> getCommentsForCollection(UUID collectionId) {
-        return commentRepository.findByCollectionIdOrderByCreatedAtAsc(collectionId)
-                .stream().map(this::toDTO).collect(Collectors.toList());
-    }
-
-    @Transactional
-    public void likeComment(UUID commentId) {
-        Comment comment = findById(commentId);
-        comment.setLikes(comment.getLikes() + 1);
-        commentRepository.save(comment);
+    public List<CommentDTO> getCommentsForCollection(UUID collectionId, UUID viewerId) {
+        List<Comment> comments = commentRepository.findByCollectionIdOrderByCreatedAtAsc(collectionId);
+        Set<UUID> likedIds = likeService.findLikedIds(viewerId, LikeService.TARGET_COMMENT,
+                comments.stream().map(Comment::getId).collect(Collectors.toList()));
+        return comments.stream()
+                .map(c -> toDTO(c, likedIds.contains(c.getId()),
+                        likeService.count(LikeService.TARGET_COMMENT, c.getId())))
+                .collect(Collectors.toList());
     }
 
     private Comment findById(UUID id) {
@@ -105,14 +109,22 @@ public class CommentService {
                 .orElseThrow(() -> AppException.notFound("Комментарий не найден"));
     }
 
-    public CommentDTO toDTO(Comment c) {
+    public CommentDTO toDTO(Comment c, UUID viewerId) {
+        long count = likeService.count(LikeService.TARGET_COMMENT, c.getId());
+        boolean liked = viewerId != null && !likeService
+                .findLikedIds(viewerId, LikeService.TARGET_COMMENT, List.of(c.getId())).isEmpty();
+        return toDTO(c, liked, count);
+    }
+
+    public CommentDTO toDTO(Comment c, boolean liked, long likes) {
         return CommentDTO.builder()
                 .id(c.getId())
                 .userId(c.getUser().getId())
                 .userName(c.getUser().getLogin())
                 .userAvatar(c.getUser().getAvatarUrl())
                 .text(c.getText())
-                .likes(c.getLikes())
+                .likes(likes)
+                .liked(liked)
                 .createdAt(c.getCreatedAt())
                 .build();
     }

@@ -59,13 +59,29 @@ async function approveCollection(id) {
   }
 }
 
-async function rejectCollection(id) {
-  const collection = collectionsQueue.value.find(c => c.id === id);
-  if (!confirm(`Отклонить подборку «${collection?.title}»?`)) return;
+const showRejectModal = ref(false);
+const rejectingCollection = ref(null);
+const rejectReason = ref('');
+
+function openRejectModal(collection) {
+  rejectingCollection.value = collection;
+  rejectReason.value = '';
+  showRejectModal.value = true;
+}
+
+async function confirmReject() {
+  if (!rejectReason.value.trim()) {
+    alert('Пожалуйста, укажите причину отклонения');
+    return;
+  }
   try {
-    await api.post(`/collections/${id}/reject`);
-    collectionsQueue.value = collectionsQueue.value.filter(c => c.id !== id);
+    await api.post(`/collections/${rejectingCollection.value.id}/reject`, {
+      moderatorComment: rejectReason.value.trim(),
+    });
+    collectionsQueue.value = collectionsQueue.value.filter(c => c.id !== rejectingCollection.value.id);
+    showRejectModal.value = false;
     showDetailsModal.value = false;
+    rejectingCollection.value = null;
   } catch (e) {
     console.error('Ошибка отклонения:', e);
   }
@@ -168,7 +184,7 @@ async function rejectCollection(id) {
                   color="red"
                   variant="soft"
                   class="rounded-xl"
-                  @click="rejectCollection(collection.id)"
+                  @click="openRejectModal(collection)"
                 >
                   Отклонить
                 </UButton>
@@ -246,6 +262,27 @@ async function rejectCollection(id) {
         <template #footer>
           <div class="flex justify-end gap-3 w-full">
             <UButton variant="outline" @click="showDetailsModal = false">Закрыть</UButton>
+          </div>
+        </template>
+      </UModal>
+
+      <UModal v-model:open="showRejectModal" class="z-100">
+        <template #body>
+          <div v-if="rejectingCollection" class="space-y-3">
+            <h3 class="text-xl font-bold text-black">Отклонить подборку</h3>
+            <p class="text-sm text-gray-600">«{{ rejectingCollection.title }}» — укажите причину отклонения, чтобы автор мог исправить:</p>
+            <UTextarea
+              v-model="rejectReason"
+              :rows="4"
+              placeholder="Например: недостаточно книг, описание не раскрывает идею подборки..."
+              class="w-full"
+            />
+          </div>
+        </template>
+        <template #footer>
+          <div class="flex justify-end gap-3 w-full">
+            <UButton variant="outline" @click="showRejectModal = false">Отмена</UButton>
+            <UButton color="red" @click="confirmReject">Отклонить</UButton>
           </div>
         </template>
       </UModal>

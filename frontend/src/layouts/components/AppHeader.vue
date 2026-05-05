@@ -26,7 +26,7 @@ function logout() {
 </script>
 
 <template>
-  <header class="bg-blue-900 p-4 flex justify-between fixed top-0 left-0 right-0 z-10 h-16">
+  <header class="bg-blue-900 p-4 flex justify-between fixed top-0 left-0 right-0 z-50 h-16">
     <router-link :to="homePath" class="flex items-center gap-2">
       <span class="text-white text-2xl font-thin">Bookshelf</span>
       <svg width="39" height="42" viewBox="0 0 39 54" fill="none" xmlns="http://www.w3.org/2000/svg">

@@ -17,6 +17,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 @RestController
@@ -99,16 +100,22 @@ public class CollectionController {
 
     @PostMapping("/{id}/approve")
     @PreAuthorize("hasRole('MODERATOR')")
-    public ResponseEntity<CollectionDTO> approveCollection(@PathVariable UUID id) {
+    public ResponseEntity<CollectionDTO> approveCollection(
+            @PathVariable UUID id,
+            @RequestBody(required = false) Map<String, String> body) {
+        String comment = body != null ? body.get("moderatorComment") : null;
         log.info("Одобрение подборки: id={}", id);
-        return ResponseEntity.ok(collectionService.approveCollection(id));
+        return ResponseEntity.ok(collectionService.approveCollection(id, comment));
     }
 
     @PostMapping("/{id}/reject")
     @PreAuthorize("hasRole('MODERATOR')")
-    public ResponseEntity<CollectionDTO> rejectCollection(@PathVariable UUID id) {
-        log.info("Отклонение подборки: id={}", id);
-        return ResponseEntity.ok(collectionService.rejectCollection(id));
+    public ResponseEntity<CollectionDTO> rejectCollection(
+            @PathVariable UUID id,
+            @RequestBody(required = false) Map<String, String> body) {
+        String comment = body != null ? body.get("moderatorComment") : null;
+        log.info("Отклонение подборки: id={}, comment='{}'", id, comment);
+        return ResponseEntity.ok(collectionService.rejectCollection(id, comment));
     }
 
     private boolean isModerator() {

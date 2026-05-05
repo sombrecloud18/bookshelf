@@ -13,6 +13,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -20,6 +21,13 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 @Slf4j
 public class SubjectCollectionService {
+
+    public static final String STATUS_PENDING = "PENDING";
+    public static final String STATUS_APPROVED = "APPROVED";
+    public static final String STATUS_REJECTED = "REJECTED";
+
+    /** Authors may edit only freshly created or rejected items; PENDING/APPROVED are locked. */
+    private static final Set<String> EDITABLE_STATUSES = Set.of(STATUS_REJECTED);
 
     private final SubjectCollectionRepository subjectCollectionRepository;
     private final BookRepository bookRepository;
@@ -30,15 +38,18 @@ public class SubjectCollectionService {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> AppException.notFound("Пользователь не найден"));
 
+        // Author role is derived from the user's profile, not taken from the request.
+        String authorRole = "TEACHER".equals(user.getUserType()) ? "TEACHER" : "STUDENT";
+
         SubjectCollection sc = SubjectCollection.builder()
                 .user(user)
                 .subject(dto.getSubject())
                 .specialty(dto.getSpecialty())
-                .specialtyName(dto.getSpecialtyName())
+                .specialtyName(dto.getSpecialtyName() != null ? dto.getSpecialtyName() : dto.getSpecialty())
                 .title(dto.getTitle())
                 .description(dto.getDescription())
-                .authorRole(dto.getAuthorRole())
-                .status("PENDING")
+                .authorRole(authorRole)
+                .status(STATUS_PENDING)
                 .build();
 
         sc = subjectCollectionRepository.save(sc);
@@ -53,17 +64,21 @@ public class SubjectCollectionService {
         if (!sc.getUser().getId().equals(userId)) {
             throw AppException.forbidden("Вы не можете редактировать чужую подборку");
         }
+        if (!EDITABLE_STATUSES.contains(sc.getStatus())) {
+            throw AppException.badRequest("Подборку нельзя править после отправки на модерацию. " +
+                    "Удалите её и создайте заново или дождитесь решения модератора.");
+        }
 
         if (dto.getSubject() != null) sc.setSubject(dto.getSubject());
         if (dto.getSpecialty() != null) sc.setSpecialty(dto.getSpecialty());
         if (dto.getSpecialtyName() != null) sc.setSpecialtyName(dto.getSpecialtyName());
         if (dto.getTitle() != null) sc.setTitle(dto.getTitle());
         if (dto.getDescription() != null) sc.setDescription(dto.getDescription());
-        if (dto.getAuthorRole() != null) sc.setAuthorRole(dto.getAuthorRole());
 
         sc.getSubjectCollectionBooks().clear();
         attachBooks(sc, dto.getBookIds());
-        sc.setStatus("PENDING");
+        sc.setStatus(STATUS_PENDING);
+        sc.setModeratorComment(null);
 
         return toDTO(subjectCollectionRepository.save(sc));
     }
@@ -83,15 +98,15 @@ public class SubjectCollectionService {
     public Page<SubjectCollectionDTO> getApprovedCollections(String subject, String specialty, Pageable pageable) {
         if (subject != null && specialty != null) {
             return subjectCollectionRepository
-                    .findBySubjectAndSpecialtyAndStatus(subject, specialty, "APPROVED", pageable)
+                    .findBySubjectAndSpecialtyAndStatus(subject, specialty, STATUS_APPROVED, pageable)
                     .map(this::toDTO);
         }
-        return subjectCollectionRepository.findByStatus("APPROVED", pageable).map(this::toDTO);
+        return subjectCollectionRepository.findByStatus(STATUS_APPROVED, pageable).map(this::toDTO);
     }
 
     @Transactional(readOnly = true)
     public Page<SubjectCollectionDTO> getPendingCollections(Pageable pageable) {
-        return subjectCollectionRepository.findByStatus("PENDING", pageable).map(this::toDTO);
+        return subjectCollectionRepository.findByStatus(STATUS_PENDING, pageable).map(this::toDTO);
     }
 
     @Transactional(readOnly = true)
@@ -103,7 +118,7 @@ public class SubjectCollectionService {
     @Transactional
     public SubjectCollectionDTO approveCollection(UUID id, String moderatorComment) {
         SubjectCollection sc = findById(id);
-        sc.setStatus("APPROVED");
+        sc.setStatus(STATUS_APPROVED);
         if (moderatorComment != null) sc.setModeratorComment(moderatorComment);
         return toDTO(subjectCollectionRepository.save(sc));
     }
@@ -111,7 +126,7 @@ public class SubjectCollectionService {
     @Transactional
     public SubjectCollectionDTO rejectCollection(UUID id, String moderatorComment) {
         SubjectCollection sc = findById(id);
-        sc.setStatus("REJECTED");
+        sc.setStatus(STATUS_REJECTED);
         if (moderatorComment != null) sc.setModeratorComment(moderatorComment);
         return toDTO(subjectCollectionRepository.save(sc));
     }

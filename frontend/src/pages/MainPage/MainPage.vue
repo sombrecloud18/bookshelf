@@ -1,5 +1,6 @@
 <script setup>
-import { ref, watch } from 'vue';
+import { ref, watch, onMounted } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
 import CatalogTab from './components/CatalogTab.vue';
 import CollectionsTab from './components/CollectionsTab.vue';
 import SubjectsTab from './components/SubjectsTab.vue';
@@ -15,13 +16,23 @@ const tabs = [
   { id: 'club', label: 'Книжный клуб' },
 ];
 
-const activeTab = ref('catalog');
+const validTabIds = tabs.map(t => t.id);
+const route = useRoute();
+const router = useRouter();
+
+function readTabFromRoute() {
+  const t = route.query.tab;
+  return validTabIds.includes(t) ? t : 'catalog';
+}
+
+const activeTab = ref(readTabFromRoute());
 const query = ref('');
 
 const books = ref([]);
 const collections = ref([]);
 const clubItems = ref([]);
 const booksLoading = ref(false);
+const collectionsLoading = ref(false);
 
 let searchTimer = null;
 
@@ -38,12 +49,16 @@ async function loadBooks(q = '') {
   }
 }
 
-async function loadCollections() {
+async function loadCollections(q = '') {
+  collectionsLoading.value = true;
   try {
-    const data = await api.get('/collections?size=20');
+    const params = q ? `?query=${encodeURIComponent(q)}&size=20` : '?size=20';
+    const data = await api.get(`/collections${params}`);
     collections.value = data.content || [];
   } catch (e) {
     console.error('Ошибка загрузки подборок:', e);
+  } finally {
+    collectionsLoading.value = false;
   }
 }
 
@@ -54,6 +69,11 @@ async function loadEvents() {
       id: e.id,
       title: e.title,
       text: e.description,
+      date: e.date,
+      time: e.time,
+      location: e.location,
+      organizer: e.organizer,
+      maxParticipants: e.maxParticipants,
       participantsCount: e.currentParticipants,
     }));
   } catch (e) {
@@ -61,13 +81,53 @@ async function loadEvents() {
   }
 }
 
-loadBooks();
-loadCollections();
-loadEvents();
+function setTab(id) {
+  activeTab.value = id;
+  router.replace({ query: { ...route.query, tab: id } });
+}
+
+function searchPlaceholder() {
+  switch (activeTab.value) {
+    case 'collections': return 'Искать подборки';
+    case 'subjects': return 'Поиск выполняется внутри вкладки';
+    case 'club': return 'Поиск пока недоступен в книжном клубе';
+    case 'recommendations': return 'Поиск пока недоступен в рекомендациях';
+    default: return 'Искать книги';
+  }
+}
+
+function searchDisabled() {
+  return activeTab.value === 'subjects' || activeTab.value === 'club' || activeTab.value === 'recommendations';
+}
+
+function applySearch(val) {
+  if (activeTab.value === 'catalog') {
+    loadBooks(val);
+  } else if (activeTab.value === 'collections') {
+    loadCollections(val);
+  }
+}
 
 watch(query, val => {
   clearTimeout(searchTimer);
-  searchTimer = setTimeout(() => loadBooks(val), 400);
+  searchTimer = setTimeout(() => applySearch(val), 400);
+});
+
+watch(activeTab, () => {
+  // Refresh the active tab's data when switching to it.
+  if (activeTab.value === 'catalog') loadBooks(query.value);
+  else if (activeTab.value === 'collections') loadCollections(query.value);
+  else if (activeTab.value === 'club') loadEvents();
+});
+
+watch(() => route.query.tab, (val) => {
+  if (validTabIds.includes(val) && val !== activeTab.value) {
+    activeTab.value = val;
+  }
+});
+
+onMounted(() => {
+  loadBooks();
 });
 </script>
 
@@ -76,7 +136,13 @@ watch(query, val => {
     <div class="max-w-7xl mx-auto">
       <div class="space-y-4">
         <div class="flex items-center gap-4">
-          <UInput v-model="query" icon="i-lucide-search" placeholder="Искать книги" class="w-full" />
+          <UInput
+            v-model="query"
+            icon="i-lucide-search"
+            :placeholder="searchPlaceholder()"
+            :disabled="searchDisabled()"
+            class="w-full"
+          />
         </div>
 
         <div class="flex gap-3 flex-wrap">
@@ -87,7 +153,7 @@ watch(query, val => {
             :variant="activeTab === t.id ? 'solid' : 'outline'"
             :color="activeTab === t.id ? 'primary' : 'neutral'"
             class="rounded-xl"
-            @click="activeTab = t.id"
+            @click="setTab(t.id)"
           >
             {{ t.label }}
           </UButton>
@@ -109,7 +175,10 @@ watch(query, val => {
 
       <!-- Подборки -->
       <div v-else-if="activeTab === 'collections'" class="mt-6">
-        <CollectionsTab :collections="collections" :books="books" />
+        <div v-if="collectionsLoading" class="flex justify-center py-12">
+          <div class="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-500"></div>
+        </div>
+        <CollectionsTab v-else :collections="collections" :books="books" />
       </div>
 
       <!-- Предметы -->

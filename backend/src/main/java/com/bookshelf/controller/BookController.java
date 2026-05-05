@@ -12,6 +12,8 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -28,13 +30,18 @@ public class BookController {
     @GetMapping
     public ResponseEntity<Page<BookDTO>> getBooks(
             @RequestParam(required = false) String query,
+            @RequestParam(name = "includeArchived", required = false, defaultValue = "false") boolean includeArchivedParam,
             @PageableDefault(size = 20) Pageable pageable) {
+        // Only moderators may pass `includeArchived=true`. For regular users we silently force `false`.
+        boolean includeArchived = includeArchivedParam && isModerator();
         if (query != null && !query.isBlank()) {
-            log.debug("Поиск книг: query='{}', page={}", query, pageable.getPageNumber());
-            return ResponseEntity.ok(bookService.searchBooks(query, pageable));
+            log.debug("Поиск книг: query='{}', includeArchived={}, page={}",
+                    query, includeArchived, pageable.getPageNumber());
+            return ResponseEntity.ok(bookService.searchBooks(query, includeArchived, pageable));
         }
-        log.debug("Список всех книг: page={}, size={}", pageable.getPageNumber(), pageable.getPageSize());
-        return ResponseEntity.ok(bookService.getAllBooks(pageable));
+        log.debug("Список книг: includeArchived={}, page={}, size={}",
+                includeArchived, pageable.getPageNumber(), pageable.getPageSize());
+        return ResponseEntity.ok(bookService.getAllBooks(includeArchived, pageable));
     }
 
     @GetMapping("/{id}")
@@ -53,18 +60,28 @@ public class BookController {
     @PreAuthorize("hasRole('MODERATOR')")
     public ResponseEntity<BookDTO> createBook(@Valid @RequestBody CreateBookDTO dto) {
         log.info("Создание книги: title='{}', author='{}'", dto.getTitle(), dto.getAuthor());
-        BookDTO result = bookService.createBook(dto);
-        log.info("Книга создана: id={}, title='{}'", result.getId(), result.getTitle());
-        return ResponseEntity.ok(result);
+        return ResponseEntity.ok(bookService.createBook(dto));
     }
 
     @PutMapping("/{id}")
     @PreAuthorize("hasRole('MODERATOR')")
     public ResponseEntity<BookDTO> updateBook(@PathVariable UUID id, @Valid @RequestBody CreateBookDTO dto) {
         log.info("Обновление книги: id={}", id);
-        BookDTO result = bookService.updateBook(id, dto);
-        log.info("Книга обновлена: id={}", id);
-        return ResponseEntity.ok(result);
+        return ResponseEntity.ok(bookService.updateBook(id, dto));
+    }
+
+    @PostMapping("/{id}/archive")
+    @PreAuthorize("hasRole('MODERATOR')")
+    public ResponseEntity<BookDTO> archive(@PathVariable UUID id) {
+        log.info("Архивация книги: id={}", id);
+        return ResponseEntity.ok(bookService.setStatus(id, BookService.STATUS_ARCHIVED));
+    }
+
+    @PostMapping("/{id}/restore")
+    @PreAuthorize("hasRole('MODERATOR')")
+    public ResponseEntity<BookDTO> restore(@PathVariable UUID id) {
+        log.info("Восстановление книги: id={}", id);
+        return ResponseEntity.ok(bookService.setStatus(id, BookService.STATUS_ACTIVE));
     }
 
     @DeleteMapping("/{id}")
@@ -72,7 +89,12 @@ public class BookController {
     public ResponseEntity<Void> deleteBook(@PathVariable UUID id) {
         log.info("Удаление книги: id={}", id);
         bookService.deleteBook(id);
-        log.info("Книга удалена: id={}", id);
         return ResponseEntity.noContent().build();
+    }
+
+    private boolean isModerator() {
+        var auth = SecurityContextHolder.getContext().getAuthentication();
+        return auth != null && auth.getAuthorities()
+                .contains(new SimpleGrantedAuthority("ROLE_MODERATOR"));
     }
 }

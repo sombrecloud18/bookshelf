@@ -1,14 +1,17 @@
 <script setup>
 import { ref, reactive, computed, onMounted } from 'vue';
 import Select from './components/Select.vue';
+import FileUpload from '../../components/FileUpload.vue';
 import { faculties, courses, specialtiesData } from '../../constants/studyData.js';
 import { api } from '../../api.js';
 
 const loading = ref(true);
 const showSuccess = ref(false);
 const showPasswordSuccess = ref(false);
+const showLoginSuccess = ref(false);
 const saveError = ref(null);
 const passwordError = ref(null);
+const loginError = ref(null);
 let successTimeout = null;
 
 const filteredSpecialties = computed(() => {
@@ -24,6 +27,8 @@ const formData = reactive({
   faculty: '',
   specialty: '',
   course: '',
+  department: '',
+  position: '',
   phoneNumber: '',
   email: '',
   avatarUrl: '',
@@ -34,8 +39,22 @@ const passwordData = reactive({
   newPassword: '',
 });
 
+const loginData = reactive({
+  currentPassword: '',
+  newLogin: '',
+});
+
 const show = ref(false);
 const showNew = ref(false);
+const showLoginPwd = ref(false);
+
+const isTeacher = computed(() => profile.value?.userType === 'TEACHER');
+
+const roleLabel = computed(() => {
+  if (profile.value?.role === 'admin') return 'Модератор';
+  if (profile.value?.userType === 'TEACHER') return 'Преподаватель';
+  return 'Студент';
+});
 
 function onFacultyChange() {
   formData.specialty = '';
@@ -48,9 +67,12 @@ function fillForm(p) {
   formData.faculty = p.faculty || '';
   formData.specialty = p.specialty || '';
   formData.course = p.course || '';
+  formData.department = p.department || '';
+  formData.position = p.position || '';
   formData.phoneNumber = p.phoneNumber || '';
   formData.email = p.email || '';
   formData.avatarUrl = p.avatarUrl || '';
+  loginData.newLogin = p.login || '';
 }
 
 onMounted(async () => {
@@ -68,19 +90,24 @@ onMounted(async () => {
 async function saveUserData() {
   saveError.value = null;
   try {
-    const updated = await api.put('/users/me', {
+    const payload = {
       firstName: formData.firstName.trim(),
       lastName: formData.lastName.trim(),
       patronymic: formData.patronymic.trim() || null,
       faculty: formData.faculty || null,
-      specialty: formData.specialty || null,
-      course: formData.course || null,
       phoneNumber: formData.phoneNumber.trim() || null,
       email: formData.email.trim(),
-      avatarUrl: formData.avatarUrl.trim() || null,
-    });
+      avatarUrl: formData.avatarUrl || null,
+    };
+    if (isTeacher.value) {
+      payload.department = formData.department.trim() || null;
+      payload.position = formData.position.trim() || null;
+    } else {
+      payload.specialty = formData.specialty || null;
+      payload.course = formData.course || null;
+    }
+    const updated = await api.put('/users/me', payload);
     profile.value = updated;
-    localStorage.setItem('bookshelf_profile', JSON.stringify(updated));
     showSuccess.value = true;
     if (successTimeout) clearTimeout(successTimeout);
     successTimeout = setTimeout(() => { showSuccess.value = false; }, 3000);
@@ -118,6 +145,30 @@ async function changePassword() {
     passwordError.value = e.message || 'Ошибка смены пароля';
   }
 }
+
+async function changeLogin() {
+  loginError.value = null;
+  if (!loginData.currentPassword || !loginData.newLogin.trim()) {
+    loginError.value = 'Заполните оба поля';
+    return;
+  }
+  if (loginData.newLogin.trim().length < 3) {
+    loginError.value = 'Логин должен содержать минимум 3 символа';
+    return;
+  }
+  try {
+    const updated = await api.put('/users/me/login', {
+      currentPassword: loginData.currentPassword,
+      newLogin: loginData.newLogin.trim(),
+    });
+    profile.value = updated;
+    loginData.currentPassword = '';
+    showLoginSuccess.value = true;
+    setTimeout(() => { showLoginSuccess.value = false; }, 3000);
+  } catch (e) {
+    loginError.value = e.message || 'Ошибка смены логина';
+  }
+}
 </script>
 
 <template>
@@ -134,9 +185,17 @@ async function changePassword() {
             {{ [profile?.lastName, profile?.firstName, profile?.patronymic].filter(Boolean).join(' ') }}
           </h2>
           <p class="text-black font-semibold">
-            {{ [profile?.faculty, profile?.specialty, profile?.course].filter(Boolean).join(', ') }}
+            <template v-if="isTeacher">
+              {{ [profile?.faculty, profile?.department, profile?.position].filter(Boolean).join(', ') }}
+            </template>
+            <template v-else>
+              {{ [profile?.faculty, profile?.specialty, profile?.course].filter(Boolean).join(', ') }}
+            </template>
           </p>
-          <p class="text-gray-600">{{ profile?.role === 'admin' ? 'Модератор' : 'Студент' }}</p>
+          <p class="text-gray-700">
+            <span class="font-semibold">Логин:</span> {{ profile?.login }}
+          </p>
+          <p class="text-gray-600">{{ roleLabel }}</p>
         </div>
       </div>
 
@@ -174,17 +233,30 @@ async function changePassword() {
               @change="onFacultyChange"
             />
 
-            <Select
-              v-model="formData.specialty"
-              label="Специальность"
-              name="specialty"
-              :items="filteredSpecialties"
-              placeholder="Выберите специальность"
-              :disabled="!formData.faculty"
-            />
+            <template v-if="!isTeacher">
+              <Select
+                v-model="formData.specialty"
+                label="Специальность"
+                name="specialty"
+                :items="filteredSpecialties"
+                placeholder="Выберите специальность"
+                :disabled="!formData.faculty"
+              />
 
-            <Select v-model="formData.course" label="Курс" name="course" :items="courses" placeholder="Выберите курс" />
+              <Select v-model="formData.course" label="Курс" name="course" :items="courses" placeholder="Выберите курс" />
+            </template>
           </div>
+
+          <template v-if="isTeacher">
+            <div class="flex gap-4 w-full max-w-xl">
+              <UFormField label="Кафедра" name="department" class="flex-1">
+                <UInput v-model="formData.department" highlight variant="outline" size="xl" placeholder="Например: Кафедра ПОИТ" />
+              </UFormField>
+              <UFormField label="Должность" name="position" class="flex-1">
+                <UInput v-model="formData.position" highlight variant="outline" size="xl" placeholder="Например: Доцент" />
+              </UFormField>
+            </div>
+          </template>
 
           <UFormField label="Номер телефона" name="phoneNumber">
             <UInput
@@ -208,15 +280,8 @@ async function changePassword() {
             />
           </UFormField>
 
-          <UFormField label="URL аватара" name="avatarUrl">
-            <UInput
-              v-model="formData.avatarUrl"
-              highlight
-              variant="outline"
-              class="w-full max-w-xl"
-              placeholder="https://..."
-              size="xl"
-            />
+          <UFormField label="Аватар">
+            <FileUpload v-model="formData.avatarUrl" scope="avatars" label="Загрузить аватар" />
           </UFormField>
 
           <UAlert v-if="saveError" color="error" variant="soft" :description="saveError" class="max-w-xl" />
@@ -230,6 +295,52 @@ async function changePassword() {
 
           <UAlert v-if="showSuccess" color="success" variant="soft" description="Данные успешно сохранены" class="mt-4" />
         </UForm>
+      </div>
+
+      <div class="border-t pt-6 mt-6">
+        <h3 class="text-lg font-semibold mb-4">Сменить логин</h3>
+
+        <div class="space-y-4 max-w-xl">
+          <UFormField label="Новый логин" name="newLogin">
+            <UInput
+              v-model="loginData.newLogin"
+              highlight
+              variant="outline"
+              class="w-full"
+              size="xl"
+              placeholder="Введите новый логин"
+            />
+          </UFormField>
+
+          <UFormField label="Текущий пароль" name="loginPassword">
+            <UInput
+              v-model="loginData.currentPassword"
+              :type="showLoginPwd ? 'text' : 'password'"
+              highlight
+              variant="outline"
+              class="w-full"
+              placeholder="Подтвердите паролем"
+              size="xl"
+            >
+              <template #trailing>
+                <UButton
+                  color="neutral"
+                  variant="link"
+                  size="sm"
+                  :icon="showLoginPwd ? 'i-lucide-eye-off' : 'i-lucide-eye'"
+                  @click="showLoginPwd = !showLoginPwd"
+                />
+              </template>
+            </UInput>
+          </UFormField>
+
+          <UAlert v-if="loginError" color="error" variant="soft" :description="loginError" />
+          <UAlert v-if="showLoginSuccess" color="success" variant="soft" description="Логин успешно изменён" />
+
+          <UButton class="bg-green-300 text-black rounded-xl" size="xl" @click="changeLogin">
+            Сменить логин
+          </UButton>
+        </div>
       </div>
 
       <div class="border-t pt-6 mt-6">

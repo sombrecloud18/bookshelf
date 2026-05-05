@@ -3,6 +3,7 @@ import { ref, computed, onMounted } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { getGenreColor } from '../../constants/genreColors';
 import BookRecommentations from './components/BookRecommentations.vue';
+import LikeButton from '../../components/LikeButton.vue';
 import { api } from '../../api.js';
 
 const route = useRoute();
@@ -72,29 +73,6 @@ async function submitReview() {
     reviewSubmitted.value = true;
   } catch (e) {
     reviewError.value = e.message || 'Ошибка при отправке рецензии';
-  }
-}
-
-async function likeReview(reviewId) {
-  try {
-    await api.post(`/reviews/${reviewId}/like`);
-    const review = reviews.value.find(r => r.id === reviewId);
-    if (review) review.likes = (review.likes || 0) + 1;
-  } catch (e) {
-    console.error('Ошибка лайка:', e);
-  }
-}
-
-async function likeComment(reviewId, commentId) {
-  try {
-    await api.post(`/comments/${commentId}/like`);
-    const review = reviews.value.find(r => r.id === reviewId);
-    if (review) {
-      const comment = (review.comments || []).find(c => c.id === commentId);
-      if (comment) comment.likes = (comment.likes || 0) + 1;
-    }
-  } catch (e) {
-    console.error('Ошибка лайка комментария:', e);
   }
 }
 
@@ -316,24 +294,16 @@ function reserve() {
                 </div>
               </div>
 
-              <p class="text-gray-700 whitespace-pre-wrap ml-12">{{ review.text }}</p>
+              <p class="text-gray-700 whitespace-pre-wrap break-words ml-12" style="overflow-wrap: anywhere">{{ review.text }}</p>
 
               <!-- Кнопки действий с рецензией -->
               <div class="ml-12 mt-3 flex items-center gap-4">
-                <button
-                  class="flex items-center gap-1 text-sm text-gray-500 hover:text-red-500 transition-colors"
-                  @click="likeReview(review.id)"
-                >
-                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                      stroke-width="2"
-                      d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"
-                    />
-                  </svg>
-                  <span>{{ review.likes || 0 }}</span>
-                </button>
+                <LikeButton
+                  target-type="REVIEW"
+                  :target-id="String(review.id)"
+                  :initial-count="Number(review.likes || 0)"
+                  :initial-liked="!!review.liked"
+                />
 
                 <button
                   class="flex items-center gap-1 text-sm text-gray-500 hover:text-blue-500 transition-colors"
@@ -387,22 +357,15 @@ function reserve() {
                       </div>
                     </div>
                   </div>
-                  <p class="text-gray-700 text-sm ml-8">{{ comment.text }}</p>
+                  <p class="text-gray-700 text-sm ml-8 break-words" style="overflow-wrap: anywhere">{{ comment.text }}</p>
                   <div class="ml-8 mt-2">
-                    <button
-                      class="flex items-center gap-1 text-xs text-gray-500 hover:text-red-500 transition-colors"
-                      @click="likeComment(review.id, comment.id)"
-                    >
-                      <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path
-                          stroke-linecap="round"
-                          stroke-linejoin="round"
-                          stroke-width="2"
-                          d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"
-                        />
-                      </svg>
-                      <span>{{ comment.likes || 0 }}</span>
-                    </button>
+                    <LikeButton
+                      target-type="COMMENT"
+                      :target-id="String(comment.id)"
+                      :initial-count="Number(comment.likes || 0)"
+                      :initial-liked="!!comment.liked"
+                      size="xs"
+                    />
                   </div>
                 </div>
               </div>

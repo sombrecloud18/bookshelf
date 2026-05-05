@@ -15,6 +15,7 @@ public class CommentDTO {
     private String userName;
     private String userAvatar;
     private String text;
-    private Integer likes;
+    private Long likes;
+    private Boolean liked;
     private OffsetDateTime createdAt;
 }

@@ -14,6 +14,8 @@ public interface BookRepository extends JpaRepository<Book, UUID> {
 
     Page<Book> findByGenre(String genre, Pageable pageable);
 
+    Page<Book> findByStatus(String status, Pageable pageable);
+
     List<Book> findByIdIn(List<UUID> ids);
 
     @Query(value = "SELECT * FROM books WHERE search_vector @@ plainto_tsquery('russian', :query) " +
@@ -28,17 +30,18 @@ public interface BookRepository extends JpaRepository<Book, UUID> {
 
     @Query(value = "SELECT b.* FROM books b " +
                    "JOIN reviews r ON r.book_id = b.id AND r.status = 'APPROVED' " +
+                   "WHERE b.status = 'ACTIVE' " +
                    "GROUP BY b.id ORDER BY AVG(r.rating) DESC LIMIT :limit",
            nativeQuery = true)
     List<Book> findTopRatedBooks(@Param("limit") int limit);
 
-    @Query(value = "SELECT * FROM books WHERE id NOT IN " +
+    @Query(value = "SELECT * FROM books WHERE status = 'ACTIVE' AND id NOT IN " +
                    "(SELECT book_id FROM user_activity WHERE user_id = CAST(:userId AS uuid)) " +
                    "ORDER BY RANDOM() LIMIT :limit",
            nativeQuery = true)
     List<Book> findRandomUnreadBooks(@Param("userId") String userId, @Param("limit") int limit);
 
-    @Query("SELECT b FROM Book b WHERE b.genre = :genre AND b.id != :excludeId ORDER BY b.createdAt DESC")
+    @Query("SELECT b FROM Book b WHERE b.genre = :genre AND b.id != :excludeId AND b.status = 'ACTIVE' ORDER BY b.createdAt DESC")
     List<Book> findSimilarByGenre(@Param("genre") String genre, @Param("excludeId") UUID excludeId, Pageable pageable);
 
     long count();

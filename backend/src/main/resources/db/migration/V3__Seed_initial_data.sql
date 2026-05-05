@@ -1,10 +1,11 @@
 -- Default moderator account (password: admin123)
+-- Hash verified against Spring's BCryptPasswordEncoder in HashCheck test.
 INSERT INTO users (id, login, email, password_hash, first_name, last_name, role)
 VALUES (
     uuid_generate_v4(),
     'admin',
     'admin@bookshelf.ru',
-    '$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy',
+    '$2a$10$f8O0f5OywnGAWk6s4DmUj.iq1Zqx9uWlFTi9vECfmcL0QcvRTcPwa',
     'Администратор',
     'Системный',
     'MODERATOR'

@@ -227,6 +227,53 @@ async function deleteCollectionById(collectionId) {
   }
 }
 
+const publishingId = ref(null);
+const publishError = ref(null);
+
+async function publishCollection(collectionId) {
+  const collection = collections.value.find(c => c.id === collectionId);
+  if (!collection) return;
+  if ((collection.bookIds || []).length === 0) {
+    publishError.value = 'Сначала добавьте книги в подборку';
+    return;
+  }
+  if (!window.confirm(`Отправить «${collection.title}» на модерацию?`)) return;
+  publishingId.value = collectionId;
+  publishError.value = null;
+  try {
+    const updated = await api.post(`/collections/${collectionId}/publish`);
+    collections.value = collections.value.map(c => c.id === collectionId ? updated : c);
+  } catch (e) {
+    publishError.value = e.message || 'Не удалось отправить на модерацию';
+  } finally {
+    publishingId.value = null;
+  }
+}
+
+function statusLabel(status) {
+  switch (status) {
+    case 'DRAFT': return 'Черновик';
+    case 'PENDING': return 'На модерации';
+    case 'APPROVED': return 'Опубликовано';
+    case 'REJECTED': return 'Отклонено';
+    default: return status || 'Черновик';
+  }
+}
+
+function statusClass(status) {
+  switch (status) {
+    case 'DRAFT': return 'bg-gray-100 text-gray-700';
+    case 'PENDING': return 'bg-yellow-100 text-yellow-700';
+    case 'APPROVED': return 'bg-green-100 text-green-700';
+    case 'REJECTED': return 'bg-red-100 text-red-700';
+    default: return 'bg-gray-100 text-gray-700';
+  }
+}
+
+function isEditable(status) {
+  return status === 'DRAFT' || status === 'REJECTED';
+}
+
 async function createCollection() {
   const nextTitle = createTitle.value.trim();
   if (!nextTitle) return;
@@ -279,6 +326,9 @@ async function createCollection() {
               >
                 {{ c.genre }}
               </span>
+              <span class="inline-flex px-3 py-0.5 text-xs font-medium rounded-full" :class="statusClass(c.status)">
+                {{ statusLabel(c.status) }}
+              </span>
             </div>
 
             <div class="flex min-h-16 items-center justify-center">
@@ -290,6 +340,9 @@ async function createCollection() {
                   {{ c.description }}
                 </p>
                 <p class="mt-2 text-xs text-gray-500 text-center">Книг: {{ (c.bookIds || []).length }}</p>
+                <p v-if="c.status === 'REJECTED' && c.moderatorComment" class="mt-2 text-xs text-red-700 bg-red-50 p-2 rounded">
+                  <span class="font-semibold">Причина отказа:</span> {{ c.moderatorComment }}
+                </p>
               </div>
             </div>
           </div>
@@ -317,18 +370,47 @@ async function createCollection() {
             </div>
           </div>
 
-          <div class="flex gap-2 justify-center mt-auto pt-4">
-            <UButton size="md" color="primary" class="flex-1 justify-center" @click="openEdit(c.id)">
+          <div class="flex flex-wrap gap-2 justify-center mt-auto pt-4">
+            <UButton
+              v-if="isEditable(c.status)"
+              size="sm"
+              color="primary"
+              class="flex-1 justify-center"
+              @click="openEdit(c.id)"
+            >
               Редактировать
             </UButton>
-            <UButton size="md" variant="outline" class="flex-1 justify-center" @click="openView(c.id)">
-              Узнать подробнее
+            <UButton size="sm" variant="outline" class="flex-1 justify-center" @click="openView(c.id)">
+              Подробнее
+            </UButton>
+            <UButton
+              v-if="isEditable(c.status)"
+              size="sm"
+              color="green"
+              :loading="publishingId === c.id"
+              :disabled="(c.bookIds || []).length === 0"
+              class="w-full justify-center"
+              @click="publishCollection(c.id)"
+            >
+              Отправить на модерацию
+            </UButton>
+            <UButton
+              v-if="!isEditable(c.status)"
+              size="sm"
+              color="error"
+              variant="soft"
+              class="w-full justify-center"
+              @click="deleteCollectionById(c.id)"
+            >
+              Удалить
             </UButton>
           </div>
         </UCard>
       </div>
 
-      <div v-else class="bg-white rounded-2xl p-6 text-black">Подборок пока нет. Создайте первую.</div>
+      <UAlert v-if="publishError" color="error" variant="soft" :description="publishError" class="mt-4" />
+
+      <div v-if="!loading && collections.length === 0" class="bg-white rounded-2xl p-6 text-black">Подборок пока нет. Создайте первую.</div>
     </div>
   </div>
 

@@ -1,4 +1,3 @@
-<!-- components/RecommendationsWidget.vue -->
 <script setup>
 import { ref, onMounted } from 'vue';
 import Card from '../../../components/Card.vue';
@@ -8,10 +7,20 @@ const personalRecommendations = ref([]);
 const popularBooks = ref([]);
 const newBooks = ref([]);
 const loading = ref(true);
+const orderedBooks = ref(new Set());
+
+async function loadOrders() {
+  try {
+    const orders = await api.get('/orders');
+    orderedBooks.value = new Set((orders || []).map(b => b.id));
+  } catch {
+    // anonymous viewer is OK
+  }
+}
 
 onMounted(async () => {
   try {
-    const data = await api.get('/recommendations');
+    const [data, _] = await Promise.all([api.get('/recommendations'), loadOrders()]);
     personalRecommendations.value = data.personal || [];
     popularBooks.value = data.popular || [];
     newBooks.value = data.newBooks || [];
@@ -21,6 +30,29 @@ onMounted(async () => {
     loading.value = false;
   }
 });
+
+async function toggleOrder(bookId) {
+  if (!bookId) return;
+  if (orderedBooks.value.has(bookId)) {
+    try {
+      await api.delete(`/orders/${bookId}`);
+      orderedBooks.value = new Set([...orderedBooks.value].filter(id => id !== bookId));
+    } catch (e) {
+      console.error('Ошибка удаления из заказов:', e);
+    }
+  } else {
+    try {
+      await api.post('/orders', { bookId });
+      orderedBooks.value = new Set([...orderedBooks.value, bookId]);
+    } catch (e) {
+      console.error('Ошибка добавления в заказы:', e);
+    }
+  }
+}
+
+function isOrdered(bookId) {
+  return orderedBooks.value.has(bookId);
+}
 </script>
 
 <template>
@@ -48,13 +80,9 @@ onMounted(async () => {
               :author="rec.author"
               :description="rec.description"
               :image-url="rec.imageUrl"
+              :is-ordered="isOrdered(rec.bookId)"
+              @toggle-order="toggleOrder(rec.bookId)"
             />
-            <div
-              v-if="rec.matchScore"
-              class="absolute -top-2 -left-2 bg-linear-to-r from-yellow-400 to-orange-500 text-black text-xs font-bold px-2 py-1 rounded-full shadow-lg"
-            >
-              {{ Math.round(rec.matchScore * 100) }}% совпадение
-            </div>
           </div>
         </div>
       </div>
@@ -72,6 +100,8 @@ onMounted(async () => {
             :author="rec.author"
             :description="rec.description"
             :image-url="rec.imageUrl"
+            :is-ordered="isOrdered(rec.bookId)"
+            @toggle-order="toggleOrder(rec.bookId)"
           />
         </div>
       </div>
@@ -89,6 +119,8 @@ onMounted(async () => {
             :author="rec.author"
             :description="rec.description"
             :image-url="rec.imageUrl"
+            :is-ordered="isOrdered(rec.bookId)"
+            @toggle-order="toggleOrder(rec.bookId)"
           />
         </div>
       </div>
@@ -98,14 +130,6 @@ onMounted(async () => {
         v-if="personalRecommendations.length === 0 && popularBooks.length === 0 && newBooks.length === 0"
         class="text-center py-12 bg-white rounded-3xl"
       >
-        <svg class="w-24 h-24 mx-auto text-gray-300 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            stroke-width="1.5"
-            d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"
-          />
-        </svg>
         <h3 class="text-xl font-semibold text-gray-600 mb-2">Нет рекомендаций</h3>
         <p class="text-gray-500">Оцените больше книг, чтобы получать персонализированные рекомендации</p>
         <UButton to="/" color="primary" class="rounded-xl mt-4">Перейти в каталог</UButton>

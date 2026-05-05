@@ -12,8 +12,8 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -21,6 +21,14 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 @Slf4j
 public class CollectionService {
+
+    public static final String STATUS_DRAFT = "DRAFT";
+    public static final String STATUS_PENDING = "PENDING";
+    public static final String STATUS_APPROVED = "APPROVED";
+    public static final String STATUS_REJECTED = "REJECTED";
+
+    /** Statuses where the author may still edit / delete the collection. */
+    private static final Set<String> EDITABLE_STATUSES = Set.of(STATUS_DRAFT, STATUS_REJECTED);
 
     private final CollectionRepository collectionRepository;
     private final BookRepository bookRepository;
@@ -36,7 +44,7 @@ public class CollectionService {
                 .title(dto.getTitle())
                 .genre(dto.getGenre())
                 .description(dto.getDescription())
-                .status("DRAFT")
+                .status(STATUS_DRAFT)
                 .build();
 
         collection = collectionRepository.save(collection);
@@ -53,6 +61,10 @@ public class CollectionService {
         if (!collection.getUser().getId().equals(userId)) {
             throw AppException.forbidden("Вы не можете редактировать чужую подборку");
         }
+        if (!EDITABLE_STATUSES.contains(collection.getStatus())) {
+            throw AppException.badRequest("Подборку нельзя править после отправки на модерацию. " +
+                    "Удалите её и создайте заново или дождитесь решения модератора.");
+        }
 
         if (dto.getTitle() != null) collection.setTitle(dto.getTitle());
         if (dto.getGenre() != null) collection.setGenre(dto.getGenre());
@@ -60,6 +72,12 @@ public class CollectionService {
 
         collection.getCollectionBooks().clear();
         attachBooks(collection, dto.getBookIds());
+
+        // After editing a previously rejected collection it returns to DRAFT until the author re-submits.
+        if (STATUS_REJECTED.equals(collection.getStatus())) {
+            collection.setStatus(STATUS_DRAFT);
+            collection.setModeratorComment(null);
+        }
 
         return toDTO(collectionRepository.save(collection));
     }
@@ -82,8 +100,15 @@ public class CollectionService {
         if (!collection.getUser().getId().equals(userId)) {
             throw AppException.forbidden("Вы не можете опубликовать чужую подборку");
         }
+        if (!EDITABLE_STATUSES.contains(collection.getStatus())) {
+            throw AppException.badRequest("Подборка уже находится на модерации или одобрена");
+        }
+        if (collection.getCollectionBooks().isEmpty()) {
+            throw AppException.badRequest("В подборке должна быть хотя бы одна книга");
+        }
 
-        collection.setStatus("PENDING");
+        collection.setStatus(STATUS_PENDING);
+        collection.setModeratorComment(null);
         CollectionDTO result = toDTO(collectionRepository.save(collection));
         log.info("Подборка отправлена на модерацию: id={}, userId={}", collectionId, userId);
         return result;
@@ -100,25 +125,29 @@ public class CollectionService {
         if (query != null && !query.isBlank()) {
             return collectionRepository.searchByKeyword(query, pageable).map(this::toDTO);
         }
-        return collectionRepository.findByStatus("APPROVED", pageable).map(this::toDTO);
+        return collectionRepository.findByStatus(STATUS_APPROVED, pageable).map(this::toDTO);
     }
 
     @Transactional(readOnly = true)
     public Page<CollectionDTO> getPendingCollections(Pageable pageable) {
-        return collectionRepository.findByStatus("PENDING", pageable).map(this::toDTO);
+        return collectionRepository.findByStatus(STATUS_PENDING, pageable).map(this::toDTO);
     }
 
     @Transactional
-    public CollectionDTO approveCollection(UUID collectionId) {
+    public CollectionDTO approveCollection(UUID collectionId, String moderatorComment) {
         Collection collection = findById(collectionId);
-        collection.setStatus("APPROVED");
+        collection.setStatus(STATUS_APPROVED);
+        collection.setModeratorComment(moderatorComment);
+        log.info("Подборка одобрена: id={}", collectionId);
         return toDTO(collectionRepository.save(collection));
     }
 
     @Transactional
-    public CollectionDTO rejectCollection(UUID collectionId) {
+    public CollectionDTO rejectCollection(UUID collectionId, String moderatorComment) {
         Collection collection = findById(collectionId);
-        collection.setStatus("REJECTED");
+        collection.setStatus(STATUS_REJECTED);
+        collection.setModeratorComment(moderatorComment);
+        log.info("Подборка отклонена: id={}, comment='{}'", collectionId, moderatorComment);
         return toDTO(collectionRepository.save(collection));
     }
 
@@ -131,13 +160,14 @@ public class CollectionService {
         if (bookIds == null) return;
 
         for (int i = 0; i < bookIds.size(); i++) {
+            final int position = i;
             UUID bookId = bookIds.get(i);
             bookRepository.findById(bookId).ifPresent(book -> {
                 CollectionBook cb = CollectionBook.builder()
                         .id(new CollectionBook.CollectionBookId(collection.getId(), book.getId()))
                         .collection(collection)
                         .book(book)
-                        .position(bookIds.indexOf(bookId))
+                        .position(position)
                         .build();
                 collection.getCollectionBooks().add(cb);
             });
@@ -156,6 +186,7 @@ public class CollectionService {
                 .genre(c.getGenre())
                 .description(c.getDescription())
                 .status(c.getStatus())
+                .moderatorComment(c.getModeratorComment())
                 .bookIds(bookIds)
                 .author(c.getUser().getLogin())
                 .authorName(buildFullName(c.getUser()))

@@ -61,7 +61,23 @@ async function request(path, options = {}) {
     return null;
   }
 
-  const data = await res.json();
+  // Tolerate empty 200 responses — some endpoints return ok with no body.
+  const text = await res.text();
+  if (!text) {
+    console.log('Response: (empty body)');
+    console.groupEnd();
+    return null;
+  }
+
+  let data;
+  try {
+    data = JSON.parse(text);
+  } catch (e) {
+    console.warn('Ответ не JSON, возвращаем как текст');
+    console.groupEnd();
+    return text;
+  }
+
   if (Array.isArray(data)) {
     console.log(`Response: Array[${data.length}]`, data.length <= 5 ? data : data.slice(0, 5).concat(['...']));
   } else if (data && typeof data === 'object' && 'content' in data) {
@@ -74,10 +90,17 @@ async function request(path, options = {}) {
   return data;
 }
 
+async function upload(path, file, fieldName = 'file') {
+  const form = new FormData();
+  form.append(fieldName, file);
+  return request(path, { method: 'POST', body: form });
+}
+
 export const api = {
   get: (path) => request(path),
   post: (path, body) => request(path, { method: 'POST', body }),
   put: (path, body) => request(path, { method: 'PUT', body }),
   patch: (path, body) => request(path, { method: 'PATCH', body }),
   delete: (path) => request(path, { method: 'DELETE' }),
+  upload,
 };

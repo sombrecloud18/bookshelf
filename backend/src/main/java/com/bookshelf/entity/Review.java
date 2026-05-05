@@ -38,9 +38,6 @@ public class Review {
     @Column(nullable = false, length = 20)
     private String status = "PENDING";
 
-    @Column(nullable = false)
-    private Integer likes = 0;
-
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)
     private OffsetDateTime createdAt;

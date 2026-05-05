@@ -31,4 +31,9 @@ public class RegisterRequestDTO {
     private String course;
     private String phoneNumber;
     private String avatarUrl;
+
+    /** STUDENT or TEACHER. Defaults to STUDENT if missing. */
+    private String userType;
+    private String department;
+    private String position;
 }

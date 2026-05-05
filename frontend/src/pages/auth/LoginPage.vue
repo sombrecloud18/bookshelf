@@ -31,8 +31,6 @@ async function submit() {
     });
     localStorage.setItem(AUTH_TOKEN_KEY, data.token);
     localStorage.setItem(AUTH_ROLE_KEY, data.role);
-    localStorage.setItem('bookshelf_auth_login', data.user.login);
-    localStorage.setItem('bookshelf_profile', JSON.stringify(data.user));
     router.push(data.role === 'admin' ? '/admin' : '/');
   } catch (e) {
     error.value = e.message || 'Неверный логин или пароль';

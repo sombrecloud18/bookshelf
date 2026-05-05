@@ -1,5 +1,6 @@
 package com.bookshelf.controller;
 
+import com.bookshelf.dto.user.ChangeLoginDTO;
 import com.bookshelf.dto.user.ChangePasswordDTO;
 import com.bookshelf.dto.user.UpdateProfileDTO;
 import com.bookshelf.dto.user.UserProfileDTO;
@@ -53,5 +54,13 @@ public class UserController {
         userService.changePassword(userId, dto);
         log.info("Пароль изменён: userId={}", userId);
         return ResponseEntity.ok().build();
+    }
+
+    @PutMapping("/me/login")
+    public ResponseEntity<UserProfileDTO> changeLogin(
+            @AuthenticationPrincipal UUID userId,
+            @Valid @RequestBody ChangeLoginDTO dto) {
+        log.info("Смена логина: userId={}", userId);
+        return ResponseEntity.ok(userService.changeLogin(userId, dto));
     }
 }

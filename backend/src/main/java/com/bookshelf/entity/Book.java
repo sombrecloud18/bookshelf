@@ -56,6 +56,9 @@ public class Book {
     @Column(unique = true, length = 20)
     private String isbn;
 
+    @Column(nullable = false, length = 20)
+    private String status = "ACTIVE";
+
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)
     private OffsetDateTime createdAt;

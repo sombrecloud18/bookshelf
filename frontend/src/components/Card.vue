@@ -3,24 +3,25 @@
     variant="soft"
     class="hover:shadow-xl transition-all duration-300 rounded-2xl bg-white flex flex-col h-full relative"
   >
-    <!-- Иконка сердечка -->
+    <!-- Звёздочка «в избранное / заказы» -->
     <button
-      class="absolute top-3 right-3 z-10 p-2 rounded-full bg-white/80 hover:bg-white transition-all duration-200 shadow-md"
-      :class="isOrdered ? 'text-red-500' : 'text-gray-400'"
-      aria-label="Добавить в заказы"
-      @click="$emit('toggle-order')"
+      class="absolute top-3 right-3 z-1 p-2 rounded-full bg-white/80 hover:bg-white transition-all duration-200 shadow-md"
+      :class="isOrdered ? 'text-yellow-400' : 'text-gray-400'"
+      :aria-label="isOrdered ? 'Убрать из заказов' : 'Добавить в заказы'"
+      :title="isOrdered ? 'В заказах' : 'Добавить в заказы'"
+      @click.stop="$emit('toggle-order')"
     >
       <svg
         class="w-5 h-5"
         :fill="isOrdered ? 'currentColor' : 'none'"
-        :stroke="isOrdered ? 'currentColor' : 'currentColor'"
-        stroke-width="1.5"
+        stroke="currentColor"
+        stroke-width="1.8"
         viewBox="0 0 24 24"
       >
         <path
           stroke-linecap="round"
           stroke-linejoin="round"
-          d="M21 8.25c0-2.485-2.099-4.5-4.688-4.5-1.935 0-3.597 1.126-4.312 2.733-.715-1.607-2.377-2.733-4.313-2.733C5.1 3.75 3 5.765 3 8.25c0 7.22 9 12 9 12s9-4.78 9-12z"
+          d="M11.48 3.499a.562.562 0 0 1 1.04 0l2.125 5.111a.563.563 0 0 0 .475.345l5.518.442c.499.04.701.663.32.988l-4.204 3.602a.563.563 0 0 0-.182.557l1.285 5.385a.562.562 0 0 1-.84.61l-4.725-2.885a.562.562 0 0 0-.586 0L6.982 20.54a.562.562 0 0 1-.84-.61l1.285-5.386a.562.562 0 0 0-.182-.557l-4.204-3.602a.562.562 0 0 1 .32-.988l5.518-.442a.562.562 0 0 0 .475-.345l2.125-5.11Z"
         />
       </svg>
     </button>
@@ -28,7 +29,7 @@
     <div>
       <div>
         <span class="inline-flex px-4 py-1 text-sm font-medium rounded-md" :class="getGenreColor(genre)">
-          {{ genre }}
+          {{ genre || 'Без жанра' }}
         </span>
       </div>
       <div class="flex min-h-16 items-center justify-center">
@@ -38,10 +39,12 @@
 
     <div class="aspect-2/3 w-full overflow-hidden rounded-lg mt-4 bg-gray-100 flex items-center justify-center">
       <img
+        v-if="imageUrl"
         class="max-h-full max-w-full object-contain hover:scale-105 transition-transform duration-300"
         :src="imageUrl"
         :alt="title"
       />
+      <span v-else class="text-xs text-gray-400">Нет обложки</span>
     </div>
 
     <div class="flex gap-2 justify-center mt-4 pt-2">
@@ -56,41 +59,17 @@ import { useRouter } from 'vue-router';
 import { getGenreColor } from '../constants/genreColors';
 
 const props = defineProps({
-  id: {
-    type: String,
-    required: true,
-  },
-  title: {
-    type: String,
-    default: 'Скорбь сатаны',
-  },
-  imageUrl: {
-    type: String,
-    default: 'https://cdn21vek.by/img/galleries/9475/355/eksmo_9475355_ecbee5c8328985f84402e430947ecd9e.jpg',
-  },
-  genre: {
-    type: String,
-    default: 'Роман',
-  },
-  author: {
-    type: String,
-    default: '',
-  },
-  description: {
-    type: String,
-    default: '',
-  },
-  year: {
-    type: [String, Number],
-    default: '',
-  },
-  isOrdered: {
-    type: Boolean,
-    default: false,
-  },
+  id: { type: String, required: true },
+  title: { type: String, required: true },
+  imageUrl: { type: String, default: '' },
+  genre: { type: String, default: '' },
+  author: { type: String, default: '' },
+  description: { type: String, default: '' },
+  year: { type: [String, Number], default: '' },
+  isOrdered: { type: Boolean, default: false },
 });
 
-const emit = defineEmits(['toggle-order']);
+defineEmits(['toggle-order']);
 const router = useRouter();
 
 function reserve() {

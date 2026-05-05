@@ -199,7 +199,7 @@ function goToBook(bookId) {
           variant="soft"
           class="bg-white rounded-[36px] shadow-lg border border-white/60 overflow-hidden transition-all hover:shadow-xl"
         >
-          <div class="grid grid-cols-1 lg:grid-cols-[240px_1fr] gap-6 p-6">
+          <div class="grid grid-cols-1 lg:grid-cols-[240px_minmax(0,1fr)] gap-6 p-6">
             <div class="flex items-center justify-center">
               <div
                 class="w-full max-w-[200px] aspect-2/3 rounded-2xl bg-gray-100 overflow-hidden shadow-md cursor-pointer hover:opacity-90 transition-opacity"
@@ -213,7 +213,7 @@ function goToBook(bookId) {
               </div>
             </div>
 
-            <div class="flex flex-col">
+            <div class="flex flex-col min-w-0">
               <div class="flex items-start justify-between gap-4">
                 <div class="flex-1">
                   <div class="flex items-center gap-3 flex-wrap">
@@ -338,7 +338,9 @@ function goToBook(bookId) {
                   </div>
                 </div>
                 <div v-else class="prose prose-sm max-w-none">
-                  <p class="text-gray-700 whitespace-pre-wrap">{{ review.text }}</p>
+                  <p class="text-gray-700 whitespace-pre-wrap break-words" style="overflow-wrap: anywhere">
+                    {{ review.text }}
+                  </p>
                 </div>
               </div>
 

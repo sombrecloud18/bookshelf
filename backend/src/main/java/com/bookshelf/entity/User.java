@@ -56,6 +56,15 @@ public class User {
     @Column(nullable = false, length = 20)
     private String role = "USER";
 
+    @Column(name = "user_type", nullable = false, length = 20)
+    private String userType = "STUDENT";
+
+    @Column(length = 255)
+    private String department;
+
+    @Column(length = 255)
+    private String position;
+
     @Column(name = "is_blocked", nullable = false)
     private boolean isBlocked = false;
 

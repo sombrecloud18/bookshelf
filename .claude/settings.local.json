@@ -31,7 +31,12 @@
       "Bash(curl -s http://localhost:3000)",
       "Bash(ls C:/Users/Lenovo/IdeaProjects/bookshelf/.env*)",
       "Bash(Get-ChildItem -Recurse -Directory)",
-      "Bash(Select-Object -First 50 FullName)"
+      "Bash(Select-Object -First 50 FullName)",
+      "Bash(mvn -q -DskipTests package)",
+      "Bash(export JAVA_HOME=\"/c/Users/Lenovo/.jdks/openjdk-21.0.2\")",
+      "Bash(python3 -c \"import bcrypt; print\\(bcrypt.hashpw\\(b'admin123', bcrypt.gensalt\\(rounds=10\\)\\).decode\\(\\)\\)\")",
+      "Bash(node -e \"const c=require\\('child_process'\\); c.execSync\\('npm list bcryptjs --prefix . 2>/dev/null', {stdio:'ignore'}\\); console.log\\('checking'\\);\")",
+      "Bash(node -e ' *)"
     ]
   }
 }

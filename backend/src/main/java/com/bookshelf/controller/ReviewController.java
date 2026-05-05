@@ -32,9 +32,7 @@ public class ReviewController {
             @AuthenticationPrincipal UUID userId,
             @Valid @RequestBody CreateReviewDTO dto) {
         log.debug("Создание рецензии: userId={}, bookId={}, rating={}", userId, dto.getBookId(), dto.getRating());
-        ReviewDTO result = reviewService.createReview(userId, dto);
-        log.info("Рецензия создана: id={}, userId={}, bookId={}", result.getId(), userId, dto.getBookId());
-        return ResponseEntity.ok(result);
+        return ResponseEntity.ok(reviewService.createReview(userId, dto));
     }
 
     @PutMapping("/{id}")
@@ -43,9 +41,7 @@ public class ReviewController {
             @PathVariable UUID id,
             @Valid @RequestBody UpdateReviewDTO dto) {
         log.debug("Обновление рецензии: id={}, userId={}", id, userId);
-        ReviewDTO result = reviewService.updateReview(userId, id, dto);
-        log.info("Рецензия обновлена: id={}", id);
-        return ResponseEntity.ok(result);
+        return ResponseEntity.ok(reviewService.updateReview(userId, id, dto));
     }
 
     @DeleteMapping("/{id}")
@@ -60,10 +56,11 @@ public class ReviewController {
 
     @GetMapping("/book/{bookId}")
     public ResponseEntity<Page<ReviewDTO>> getBookReviews(
+            @AuthenticationPrincipal UUID viewerId,
             @PathVariable UUID bookId,
             @PageableDefault(size = 10) Pageable pageable) {
-        log.debug("Рецензии книги: bookId={}, page={}", bookId, pageable.getPageNumber());
-        return ResponseEntity.ok(reviewService.getBookReviews(bookId, pageable));
+        log.debug("Рецензии книги: bookId={}, viewerId={}, page={}", bookId, viewerId, pageable.getPageNumber());
+        return ResponseEntity.ok(reviewService.getBookReviews(bookId, viewerId, pageable));
     }
 
     @GetMapping("/my")
@@ -93,13 +90,6 @@ public class ReviewController {
     public ResponseEntity<ReviewDTO> rejectReview(@PathVariable UUID id) {
         log.info("Отклонение рецензии: id={}", id);
         return ResponseEntity.ok(reviewService.rejectReview(id));
-    }
-
-    @PostMapping("/{id}/like")
-    public ResponseEntity<Void> likeReview(@PathVariable UUID id) {
-        log.debug("Лайк рецензии: id={}", id);
-        reviewService.likeReview(id);
-        return ResponseEntity.ok().build();
     }
 
     private boolean isModerator() {

@@ -21,6 +21,9 @@ public class UserProfileDTO {
     private String phoneNumber;
     private String avatarUrl;
     private String role;
+    private String userType;   // STUDENT | TEACHER
+    private String department; // teachers only
+    private String position;   // teachers only
     private String fullName;
     private String studyInfo;
     private boolean isBlocked;

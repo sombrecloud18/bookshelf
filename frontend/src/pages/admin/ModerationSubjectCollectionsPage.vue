@@ -142,7 +142,7 @@ async function confirmReject() {
 
                 <div class="mt-3 flex flex-wrap gap-4 text-sm text-gray-500">
                   <span>📚 Книг: {{ (collection.bookIds || []).length }}</span>
-                  <span>👤 Автор: {{ collection.author }} ({{ collection.authorRole === 'teacher' ? 'Преподаватель' : 'Студент' }})</span>
+                  <span>👤 Автор: {{ collection.author }} ({{ collection.authorRole === 'TEACHER' ? 'Преподаватель' : 'Студент' }})</span>
                   <span>📅 {{ formatDate(collection.createdAt) }}</span>
                 </div>
               </div>

@@ -15,4 +15,6 @@ public class UpdateProfileDTO {
     @Email(message = "Некорректный формат email")
     private String email;
     private String avatarUrl;
+    private String department;
+    private String position;
 }

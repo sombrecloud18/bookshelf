@@ -22,5 +22,6 @@ public class BookDTO {
     private String publisher;
     private Integer publishYear;
     private String isbn;
+    private String status;
     private Double averageRating;
 }
