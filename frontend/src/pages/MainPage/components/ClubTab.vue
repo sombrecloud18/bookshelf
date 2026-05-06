@@ -150,8 +150,7 @@ async function cancelGoing() {
     </template>
 
     <template #footer>
-      <div class="flex items-center justify-between gap-3 w-full">
-        <UButton variant="outline" class="rounded-xl" @click="open = false">Закрыть</UButton>
+      <div class="flex items-center justify-end gap-3 w-full">
         <UButton
           v-if="selectedState?.registered"
           color="error"

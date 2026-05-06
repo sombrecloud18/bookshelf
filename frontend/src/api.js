@@ -39,7 +39,11 @@ async function request(path, options = {}) {
   const statusColor = res.ok ? 'color: green' : res.status >= 500 ? 'color: red' : 'color: orange';
   console.log(`%cStatus: ${res.status} (${ms}ms)`, statusColor);
 
-  if (res.status === 401) {
+  // Auth endpoints handle 401 inline (showing "wrong credentials" to the user);
+  // treating those as session-expired would loop the user back to /auth and hide the error.
+  const isAuthEndpoint = path.startsWith('/auth/');
+
+  if (res.status === 401 && !isAuthEndpoint) {
     console.warn('401 — сессия истекла, перенаправление на /auth');
     console.groupEnd();
     localStorage.removeItem(AUTH_TOKEN_KEY);

@@ -5,7 +5,7 @@
   >
     <!-- Звёздочка «в избранное / заказы» -->
     <button
-      class="absolute top-3 right-3 z-1 p-2 rounded-full bg-white/80 hover:bg-white transition-all duration-200 shadow-md"
+      class="absolute top-3 right-3 p-2 rounded-full bg-white/80 hover:bg-white transition-all duration-200 shadow-md"
       :class="isOrdered ? 'text-yellow-400' : 'text-gray-400'"
       :aria-label="isOrdered ? 'Убрать из заказов' : 'Добавить в заказы'"
       :title="isOrdered ? 'В заказах' : 'Добавить в заказы'"
