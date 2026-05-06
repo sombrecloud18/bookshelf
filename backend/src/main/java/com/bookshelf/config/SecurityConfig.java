@@ -71,6 +71,10 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.POST, "/api/subject-collections/*/reject").hasRole("MODERATOR")
                 .requestMatchers(HttpMethod.POST, "/api/events").hasRole("MODERATOR")
                 .requestMatchers(HttpMethod.PUT,  "/api/events/**").hasRole("MODERATOR")
+                // Self-unregister from event must be allowed for any authenticated user;
+                // place this BEFORE the broad DELETE rule so the moderator-only catch-all
+                // does not swallow it.
+                .requestMatchers(HttpMethod.DELETE, "/api/events/*/register").authenticated()
                 .requestMatchers(HttpMethod.DELETE, "/api/events/**").hasRole("MODERATOR")
                 .requestMatchers(HttpMethod.POST, "/api/books").hasRole("MODERATOR")
                 .requestMatchers(HttpMethod.PUT,  "/api/books/**").hasRole("MODERATOR")

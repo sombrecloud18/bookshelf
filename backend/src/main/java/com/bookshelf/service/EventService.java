@@ -29,7 +29,8 @@ public class EventService {
 
     @Transactional(readOnly = true)
     public Page<EventDTO> getUpcomingEvents(Pageable pageable) {
-        return eventRepository.findUpcoming(pageable).map(e -> toDTO(e, 0));
+        return eventRepository.findUpcoming(pageable)
+                .map(e -> toDTO(e, eventParticipantRepository.countByEventId(e.getId())));
     }
 
     @Transactional(readOnly = true)
