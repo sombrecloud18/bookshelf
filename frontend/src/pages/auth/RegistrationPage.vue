@@ -2,10 +2,14 @@
 import { computed, reactive, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import Select from '../AccountPage/components/Select.vue';
-import { faculties, courses, specialtiesData } from '../../constants/studyData.js';
+import { courses } from '../../constants/studyData.js';
+import { useFaculties } from '../../composables/useFaculties.js';
 import AppHeader from '../../layouts/components/AppHeader.vue';
 import FileUpload from '../../components/FileUpload.vue';
 import { api } from '../../api.js';
+
+const { facultyOptions, specialtiesByFaculty } = useFaculties();
+const faculties = facultyOptions;
 
 const AUTH_TOKEN_KEY = 'bookshelf_auth_token';
 const AUTH_ROLE_KEY = 'bookshelf_auth_role';
@@ -33,7 +37,7 @@ const form = reactive({
 
 const filteredSpecialties = computed(() => {
   if (!form.faculty) return [];
-  return specialtiesData[form.faculty] || [];
+  return specialtiesByFaculty.value[form.faculty] || [];
 });
 
 function onFacultyChange() {

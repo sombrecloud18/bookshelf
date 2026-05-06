@@ -55,6 +55,7 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.GET,  "/api/recommendations/similar/**").permitAll()
                 .requestMatchers(HttpMethod.GET,  "/api/subject-collections").permitAll()
                 .requestMatchers(HttpMethod.GET,  "/api/subjects").permitAll()
+                .requestMatchers(HttpMethod.GET,  "/api/faculties").permitAll()
                 .requestMatchers(HttpMethod.GET,  "/api/reviews/book/**").permitAll()
                 // Static files (avatars, covers) and WebSocket handshake
                 .requestMatchers("/files/**", "/ws/**").permitAll()

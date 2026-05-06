@@ -1,13 +1,35 @@
 <script setup>
-import { ref, onMounted } from 'vue';
+import { computed, ref, onMounted } from 'vue';
 import Card from '../../../components/Card.vue';
 import { api } from '../../../api.js';
+
+const props = defineProps({
+  query: { type: String, default: '' },
+});
 
 const personalRecommendations = ref([]);
 const popularBooks = ref([]);
 const newBooks = ref([]);
 const loading = ref(true);
 const orderedBooks = ref(new Set());
+
+function matches(rec, q) {
+  if (!q) return true;
+  const ql = q.toLowerCase();
+  return (
+    (rec.title || '').toLowerCase().includes(ql) ||
+    (rec.author || '').toLowerCase().includes(ql) ||
+    (rec.genre || '').toLowerCase().includes(ql) ||
+    (rec.description || '').toLowerCase().includes(ql)
+  );
+}
+
+const filteredPersonal = computed(() => personalRecommendations.value.filter(r => matches(r, props.query)));
+const filteredPopular = computed(() => popularBooks.value.filter(r => matches(r, props.query)));
+const filteredNew = computed(() => newBooks.value.filter(r => matches(r, props.query)));
+const hasAnyResults = computed(() =>
+  filteredPersonal.value.length + filteredPopular.value.length + filteredNew.value.length > 0,
+);
 
 async function loadOrders() {
   try {
@@ -63,7 +85,7 @@ function isOrdered(bookId) {
 
     <template v-else>
       <!-- Персональные рекомендации -->
-      <div v-if="personalRecommendations.length > 0">
+      <div v-if="filteredPersonal.length > 0">
         <div class="flex items-center justify-between mb-4">
           <div>
             <h2 class="text-2xl font-bold text-black">Рекомендации для вас</h2>
@@ -72,7 +94,7 @@ function isOrdered(bookId) {
         </div>
 
         <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-          <div v-for="rec in personalRecommendations" :key="rec.id" class="relative">
+          <div v-for="rec in filteredPersonal" :key="rec.id" class="relative">
             <Card
               :id="String(rec.bookId)"
               :title="rec.title"
@@ -88,11 +110,11 @@ function isOrdered(bookId) {
       </div>
 
       <!-- Популярные книги -->
-      <div v-if="popularBooks.length > 0">
+      <div v-if="filteredPopular.length > 0">
         <h2 class="text-2xl font-bold text-black mb-4">Популярное</h2>
         <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
           <Card
-            v-for="rec in popularBooks"
+            v-for="rec in filteredPopular"
             :id="String(rec.bookId)"
             :key="rec.id"
             :title="rec.title"
@@ -107,11 +129,11 @@ function isOrdered(bookId) {
       </div>
 
       <!-- Новинки -->
-      <div v-if="newBooks.length > 0">
+      <div v-if="filteredNew.length > 0">
         <h2 class="text-2xl font-bold text-black mb-4">Новинки</h2>
         <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
           <Card
-            v-for="rec in newBooks"
+            v-for="rec in filteredNew"
             :id="String(rec.bookId)"
             :key="rec.id"
             :title="rec.title"
@@ -125,9 +147,17 @@ function isOrdered(bookId) {
         </div>
       </div>
 
-      <!-- Пустое состояние -->
+      <!-- Empty / no-match states -->
       <div
-        v-if="personalRecommendations.length === 0 && popularBooks.length === 0 && newBooks.length === 0"
+        v-if="!hasAnyResults && props.query"
+        class="text-center py-12 bg-white rounded-3xl"
+      >
+        <h3 class="text-xl font-semibold text-gray-600 mb-2">Ничего не найдено</h3>
+        <p class="text-gray-500">По запросу «{{ props.query }}» среди рекомендаций ничего не подошло.</p>
+      </div>
+
+      <div
+        v-else-if="personalRecommendations.length === 0 && popularBooks.length === 0 && newBooks.length === 0"
         class="text-center py-12 bg-white rounded-3xl"
       >
         <h3 class="text-xl font-semibold text-gray-600 mb-2">Нет рекомендаций</h3>

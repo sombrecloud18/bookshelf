@@ -5,6 +5,18 @@ import { subscribeStomp } from '../../../composables/useStomp.js';
 
 const props = defineProps({
   items: { type: Array, default: () => [] },
+  query: { type: String, default: '' },
+});
+
+const filteredItems = computed(() => {
+  const q = props.query.trim().toLowerCase();
+  if (!q) return props.items;
+  return props.items.filter(i =>
+    (i.title || '').toLowerCase().includes(q) ||
+    (i.text || '').toLowerCase().includes(q) ||
+    (i.location || '').toLowerCase().includes(q) ||
+    (i.organizer || '').toLowerCase().includes(q),
+  );
 });
 
 // Local mirror of the participant counts and registration state, keyed by event id.
@@ -128,9 +140,15 @@ async function cancelGoing() {
 </script>
 
 <template>
-  <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+  <div
+    v-if="filteredItems.length === 0 && props.query"
+    class="bg-white rounded-2xl p-6 text-sm text-gray-500 text-center"
+  >
+    По запросу «{{ props.query }}» мероприятий не найдено.
+  </div>
+  <div v-else class="grid grid-cols-1 md:grid-cols-3 gap-6">
     <UCard
-      v-for="i in items"
+      v-for="i in filteredItems"
       :key="i.id"
       variant="soft"
       class="bg-white rounded-2xl p-5 hover:shadow-xl transition-all duration-300"

@@ -18,7 +18,7 @@ import ModerationReviewsPage from '../pages/admin/ModerationReviewsPage.vue';
 import EventsPage from '../pages/admin/EventsPage.vue';
 import ModerationSubjectCollectionsPage from '../pages/admin/ModerationSubjectCollectionsPage.vue';
 import AdminBooksPage from '../pages/admin/BooksPage.vue';
-import AdminSubjectsPage from '../pages/admin/SubjectsPage.vue';
+import AdminStudySystemPage from '../pages/admin/StudySystemPage.vue';
 
 const AUTH_TOKEN_KEY = 'bookshelf_auth_token';
 const AUTH_ROLE_KEY = 'bookshelf_auth_role';
@@ -78,7 +78,7 @@ const routes = [
       { path: 'events', name: 'admin-events', component: EventsPage },
       { path: 'subject-collections', name: 'admin-subject-collections', component: ModerationSubjectCollectionsPage },
       { path: 'books', name: 'admin-books', component: AdminBooksPage },
-      { path: 'subjects', name: 'admin-subjects', component: AdminSubjectsPage },
+      { path: 'study-system', name: 'admin-study-system', component: AdminStudySystemPage },
     ],
   },
   {

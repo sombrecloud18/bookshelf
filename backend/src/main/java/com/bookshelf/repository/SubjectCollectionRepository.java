@@ -11,6 +11,7 @@ import java.util.UUID;
 public interface SubjectCollectionRepository extends JpaRepository<SubjectCollection, UUID> {
 
     Page<SubjectCollection> findBySubjectAndSpecialtyAndStatus(String subject, String specialty, String status, Pageable pageable);
+    Page<SubjectCollection> findBySubjectAndStatus(String subject, String status, Pageable pageable);
     Page<SubjectCollection> findByStatus(String status, Pageable pageable);
     List<SubjectCollection> findByUserId(UUID userId);
     long countByStatus(String status);

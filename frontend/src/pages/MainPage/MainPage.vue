@@ -89,18 +89,16 @@ function setTab(id) {
 function searchPlaceholder() {
   switch (activeTab.value) {
     case 'collections': return 'Искать подборки';
-    case 'subjects': return 'Поиск выполняется внутри вкладки';
-    case 'club': return 'Поиск пока недоступен в книжном клубе';
-    case 'recommendations': return 'Поиск пока недоступен в рекомендациях';
+    case 'subjects': return 'Поиск по специальности / предмету / подборке';
+    case 'club': return 'Искать мероприятия';
+    case 'recommendations': return 'Искать в рекомендациях';
     default: return 'Искать книги';
   }
 }
 
-function searchDisabled() {
-  return activeTab.value === 'subjects' || activeTab.value === 'club' || activeTab.value === 'recommendations';
-}
-
 function applySearch(val) {
+  // Server-side search only for catalogs (heavy data, paginated). The other tabs
+  // filter client-side using `query` as a prop.
   if (activeTab.value === 'catalog') {
     loadBooks(val);
   } else if (activeTab.value === 'collections') {
@@ -150,7 +148,6 @@ onMounted(() => {
             v-model="query"
             icon="i-lucide-search"
             :placeholder="searchPlaceholder()"
-            :disabled="searchDisabled()"
             class="w-full"
           />
         </div>
@@ -172,7 +169,7 @@ onMounted(() => {
 
       <!-- Рекомендации -->
       <div v-if="activeTab === 'recommendations'" class="mt-6">
-        <RecommendationWidget />
+        <RecommendationWidget :query="query" />
       </div>
 
       <!-- Каталог -->
@@ -193,12 +190,12 @@ onMounted(() => {
 
       <!-- Предметы -->
       <div v-else-if="activeTab === 'subjects'" class="mt-6">
-        <SubjectsTab />
+        <SubjectsTab :query="query" />
       </div>
 
       <!-- Книжный клуб -->
       <div v-else class="mt-6">
-        <ClubTab :items="clubItems" />
+        <ClubTab :items="clubItems" :query="query" />
       </div>
     </div>
   </div>

@@ -2,8 +2,12 @@
 import { ref, reactive, computed, onMounted } from 'vue';
 import Select from './components/Select.vue';
 import FileUpload from '../../components/FileUpload.vue';
-import { faculties, courses, specialtiesData } from '../../constants/studyData.js';
+import { courses } from '../../constants/studyData.js';
+import { useFaculties } from '../../composables/useFaculties.js';
 import { api } from '../../api.js';
+
+const { facultyOptions, specialtiesByFaculty } = useFaculties();
+const faculties = facultyOptions;
 
 const loading = ref(true);
 const showSuccess = ref(false);
@@ -16,7 +20,7 @@ let successTimeout = null;
 
 const filteredSpecialties = computed(() => {
   if (!formData.faculty) return [];
-  return specialtiesData[formData.faculty] || [];
+  return specialtiesByFaculty.value[formData.faculty] || [];
 });
 
 const profile = ref(null);

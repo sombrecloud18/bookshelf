@@ -1,12 +1,18 @@
 <script setup>
 import { computed, ref, watch, onMounted } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { specialtiesData } from '../../../constants/studyData.js';
 import { api } from '../../../api.js';
+import { useFaculties } from '../../../composables/useFaculties.js';
 import CollectionsTab from './CollectionsTab.vue';
+
+const props = defineProps({
+  query: { type: String, default: '' },
+});
 
 const route = useRoute();
 const router = useRouter();
+
+const { faculties: apiFaculties } = useFaculties();
 
 // Hydrate selection from URL on first paint so a reload keeps the user on the
 // same drill-down level instead of throwing them back to the specialty grid.
@@ -23,13 +29,53 @@ function syncQuery() {
 }
 
 // Faculty -> alphabetically sorted specialties, used by the 2-level grid below.
+// Sourced from the API so that admin edits in /admin/study-system flow through here.
 const facultyColumns = computed(() => {
   const out = [];
-  for (const [faculty, specs] of Object.entries(specialtiesData || {})) {
-    const sorted = [...specs].sort((a, b) => a.label.localeCompare(b.label, 'ru'));
-    out.push({ faculty, specialties: sorted });
+  for (const f of apiFaculties.value || []) {
+    const specs = (f.specialties || [])
+      .map(s => ({ value: s.name, label: s.name }))
+      .sort((a, b) => a.label.localeCompare(b.label, 'ru'));
+    out.push({ faculty: f.name, specialties: specs });
   }
   return out;
+});
+
+// ---- Search (tier-dependent behaviour, see #5) ----
+const lowerQuery = computed(() => props.query.trim().toLowerCase());
+
+const filteredFacultyColumns = computed(() => {
+  const q = lowerQuery.value;
+  if (!q) return facultyColumns.value;
+  // No specialty selected → match against specialty labels and faculty names;
+  // empty faculties are dropped entirely so non-matching tiles disappear.
+  return facultyColumns.value
+    .map(col => ({
+      ...col,
+      specialties: col.specialties.filter(
+        s => s.label.toLowerCase().includes(q) || col.faculty.toLowerCase().includes(q),
+      ),
+    }))
+    .filter(col => col.specialties.length > 0);
+});
+
+const filteredSubjects = computed(() => {
+  const q = lowerQuery.value;
+  if (!q) return subjectsList.value;
+  // Specialty selected, no subject → fuzzy alphabetical match on subject names.
+  return subjectsList.value
+    .filter(s => s.toLowerCase().includes(q))
+    .sort((a, b) => a.localeCompare(b, 'ru'));
+});
+
+const filteredSubjectCollections = computed(() => {
+  const q = lowerQuery.value;
+  if (!q) return subjectCollections.value;
+  // Subject selected → match collection title (and description as a bonus).
+  return subjectCollections.value.filter(c =>
+    (c.title || '').toLowerCase().includes(q) ||
+    (c.description || '').toLowerCase().includes(q),
+  );
 });
 
 const subjectsList = ref([]);
@@ -210,8 +256,15 @@ async function submitAdd() {
       <div class="text-xs text-gray-500">Выберите специальность</div>
     </div>
 
-    <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 gap-4">
-      <div v-for="col in facultyColumns" :key="col.faculty" class="flex flex-col">
+    <div
+      v-if="filteredFacultyColumns.length === 0"
+      class="text-sm text-gray-500 text-center py-6"
+    >
+      По запросу «{{ props.query }}» ничего не найдено.
+    </div>
+
+    <div v-else class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 gap-4">
+      <div v-for="col in filteredFacultyColumns" :key="col.faculty" class="flex flex-col">
         <div class="px-3 py-2 mb-2 rounded-xl bg-blue-900 text-white font-bold text-center text-sm">
           {{ col.faculty }}
         </div>
@@ -243,11 +296,14 @@ async function submitAdd() {
     <div v-else-if="subjectsList.length === 0" class="text-sm text-gray-500 text-center py-4">
       Для этой специальности предметы ещё не добавлены администратором
     </div>
+    <div v-else-if="filteredSubjects.length === 0" class="text-sm text-gray-500 text-center py-4">
+      По запросу «{{ props.query }}» ничего не найдено.
+    </div>
     <div v-else class="overflow-auto">
       <table class="min-w-full text-sm">
         <tbody>
           <tr
-            v-for="subject in subjectsList"
+            v-for="subject in filteredSubjects"
             :key="subject"
             class="border-t border-gray-100 hover:bg-gray-50 cursor-pointer"
             @click="selectedSubject = subject"
@@ -271,7 +327,13 @@ async function submitAdd() {
     <div v-if="collectionsLoading" class="flex justify-center py-8">
       <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
     </div>
-    <CollectionsTab v-else :collections="subjectCollections" :books="booksForCollections" />
+    <div
+      v-else-if="filteredSubjectCollections.length === 0 && lowerQuery"
+      class="bg-white rounded-2xl p-6 text-sm text-gray-500 text-center"
+    >
+      По запросу «{{ props.query }}» подборок не найдено.
+    </div>
+    <CollectionsTab v-else :collections="filteredSubjectCollections" :books="booksForCollections" />
   </div>
 
   <UModal v-model:open="addOpen" title="Добавить подборку" class="z-100">

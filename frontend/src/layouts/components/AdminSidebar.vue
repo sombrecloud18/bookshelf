@@ -26,7 +26,7 @@ const route = useRoute();
 const menuItems = [
   { path: '/admin', icon: 'material-symbols-light:space-dashboard-outline', label: 'Панель администратора' },
   { path: '/admin/books', icon: 'material-symbols-light:menu-book-outline', label: 'Книги' },
-  { path: '/admin/subjects', icon: 'material-symbols-light:school-outline', label: 'Предметы' },
+  { path: '/admin/study-system', icon: 'material-symbols-light:school-outline', label: 'Учебная система' },
   { path: '/admin/collections', icon: 'material-symbols-light:fact-check-outline', label: 'Модерация подборок' },
   { path: '/admin/subject-collections', icon: 'material-symbols-light:fact-check-outline', label: 'Модерация учебных подборок' },
   { path: '/admin/reviews', icon: 'material-symbols-light:fact-check-outline', label: 'Модерация рецензий' },

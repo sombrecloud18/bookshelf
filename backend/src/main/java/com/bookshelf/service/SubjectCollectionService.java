@@ -96,9 +96,12 @@ public class SubjectCollectionService {
 
     @Transactional(readOnly = true)
     public Page<SubjectCollectionDTO> getApprovedCollections(String subject, String specialty, Pageable pageable) {
-        if (subject != null && specialty != null) {
+        // Since subject names are globally unique now, filter by subject ALONE when it's
+        // provided — collections for the same subject are shared across specialties
+        // (per product spec: "общие предметы → общие подборки").
+        if (subject != null) {
             return subjectCollectionRepository
-                    .findBySubjectAndSpecialtyAndStatus(subject, specialty, STATUS_APPROVED, pageable)
+                    .findBySubjectAndStatus(subject, STATUS_APPROVED, pageable)
                     .map(this::toDTO);
         }
         return subjectCollectionRepository.findByStatus(STATUS_APPROVED, pageable).map(this::toDTO);

@@ -21,11 +21,14 @@ public class SubjectController {
 
     private final SubjectService subjectService;
 
-    /** Public — list of subjects (optionally filtered by specialty). */
+    /**
+     * Public — list of subjects. {@code specialty} accepts either a specialty UUID
+     * (preferred) or a specialty name (legacy clients). When omitted, returns all subjects.
+     */
     @GetMapping
     public ResponseEntity<List<SubjectDTO>> list(@RequestParam(required = false) String specialty) {
         log.debug("Список предметов: specialty='{}'", specialty);
-        return ResponseEntity.ok(subjectService.listBySpecialty(specialty));
+        return ResponseEntity.ok(subjectService.listForSpecialty(specialty));
     }
 
     @PostMapping
