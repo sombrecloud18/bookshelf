@@ -17,6 +17,7 @@ import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.Map;
 import java.util.UUID;
 
 @RestController
@@ -87,9 +88,12 @@ public class ReviewController {
 
     @PostMapping("/{id}/reject")
     @PreAuthorize("hasRole('MODERATOR')")
-    public ResponseEntity<ReviewDTO> rejectReview(@PathVariable UUID id) {
-        log.info("Отклонение рецензии: id={}", id);
-        return ResponseEntity.ok(reviewService.rejectReview(id));
+    public ResponseEntity<ReviewDTO> rejectReview(
+            @PathVariable UUID id,
+            @RequestBody(required = false) Map<String, String> body) {
+        String comment = body != null ? body.get("moderatorComment") : null;
+        log.info("Отклонение рецензии: id={}, comment='{}'", id, comment);
+        return ResponseEntity.ok(reviewService.rejectReview(id, comment));
     }
 
     private boolean isModerator() {

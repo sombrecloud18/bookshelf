@@ -1,26 +1,34 @@
 <script setup>
 import { computed, ref, watch, onMounted } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
 import { specialtiesData } from '../../../constants/studyData.js';
 import { api } from '../../../api.js';
 import CollectionsTab from './CollectionsTab.vue';
 
-const selectedSpecialty = ref(null);
-const selectedSubject = ref(null);
+const route = useRoute();
+const router = useRouter();
 
-const specialties = computed(() => {
-  const result = [];
-  for (const [faculty, specs] of Object.entries(specialtiesData || {})) {
-    for (const s of specs) {
-      result.push({ faculty, value: s.value, label: s.label });
-    }
-  }
-  return result;
-});
+// Hydrate selection from URL on first paint so a reload keeps the user on the
+// same drill-down level instead of throwing them back to the specialty grid.
+const selectedSpecialty = ref(route.query.specialty || null);
+const selectedSubject = ref(route.query.subject || null);
 
-const specialtiesGrid = computed(() => {
-  const cols = 3;
+function syncQuery() {
+  const next = { ...route.query };
+  if (selectedSpecialty.value) next.specialty = selectedSpecialty.value;
+  else delete next.specialty;
+  if (selectedSubject.value) next.subject = selectedSubject.value;
+  else delete next.subject;
+  router.replace({ query: next });
+}
+
+// Faculty -> alphabetically sorted specialties, used by the 2-level grid below.
+const facultyColumns = computed(() => {
   const out = [];
-  for (let i = 0; i < specialties.value.length; i += cols) out.push(specialties.value.slice(i, i + cols));
+  for (const [faculty, specs] of Object.entries(specialtiesData || {})) {
+    const sorted = [...specs].sort((a, b) => a.label.localeCompare(b.label, 'ru'));
+    out.push({ faculty, specialties: sorted });
+  }
   return out;
 });
 
@@ -54,11 +62,21 @@ function goBreadcrumb(key) {
   }
 }
 
-watch(selectedSpecialty, async specialty => {
-  selectedSubject.value = null;
-  subjectCollections.value = [];
-  booksForCollections.value = [];
-  if (!specialty) return;
+watch(selectedSpecialty, async (specialty, prev) => {
+  // Reset the lower drill-down only when the specialty actually changed in the UI,
+  // not when we hydrated it from the URL alongside a subject.
+  if (prev !== undefined) {
+    if (specialty !== prev) {
+      selectedSubject.value = null;
+      subjectCollections.value = [];
+      booksForCollections.value = [];
+    }
+  }
+  syncQuery();
+  if (!specialty) {
+    subjectsList.value = [];
+    return;
+  }
   subjectsLoading.value = true;
   subjectsList.value = [];
   try {
@@ -69,7 +87,7 @@ watch(selectedSpecialty, async specialty => {
   } finally {
     subjectsLoading.value = false;
   }
-});
+}, { immediate: true });
 
 async function loadSubjectCollections() {
   if (!selectedSubject.value || !selectedSpecialty.value) return;
@@ -93,11 +111,12 @@ async function loadSubjectCollections() {
 }
 
 watch(selectedSubject, () => {
+  syncQuery();
   subjectCollections.value = [];
   booksForCollections.value = [];
   if (!selectedSubject.value || !selectedSpecialty.value) return;
   loadSubjectCollections();
-});
+}, { immediate: true });
 
 // ---- Add collection modal ----
 const addOpen = ref(false);
@@ -184,30 +203,30 @@ async function submitAdd() {
     </button>
   </div>
 
-  <!-- 1) Специальности -->
+  <!-- 1) Специальности — колонка на факультет, специальности в столбик по алфавиту -->
   <UCard v-if="!selectedSpecialty" variant="soft" class="bg-white rounded-2xl p-5">
     <div class="flex items-center justify-between mb-4">
       <h2 class="text-lg font-semibold text-black">Специальности</h2>
       <div class="text-xs text-gray-500">Выберите специальность</div>
     </div>
 
-    <div class="overflow-auto">
-      <table class="min-w-full text-sm">
-        <tbody>
-          <tr v-for="(row, rIdx) in specialtiesGrid" :key="rIdx" class="border-t border-gray-100">
-            <td v-for="s in row" :key="s.value" class="py-3 pr-4 align-top">
-              <button
-                type="button"
-                class="w-full text-left rounded-xl border border-gray-200 hover:bg-gray-50 px-3 py-2"
-                @click="selectedSpecialty = s.value"
-              >
-                <div class="font-semibold text-black">{{ s.label }}</div>
-                <div class="text-xs text-gray-500 mt-0.5">{{ s.faculty }}</div>
-              </button>
-            </td>
-          </tr>
-        </tbody>
-      </table>
+    <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 gap-4">
+      <div v-for="col in facultyColumns" :key="col.faculty" class="flex flex-col">
+        <div class="px-3 py-2 mb-2 rounded-xl bg-blue-900 text-white font-bold text-center text-sm">
+          {{ col.faculty }}
+        </div>
+        <div class="flex flex-col gap-2">
+          <button
+            v-for="s in col.specialties"
+            :key="`${col.faculty}-${s.value}`"
+            type="button"
+            class="w-full text-left rounded-xl border border-gray-200 hover:bg-gray-50 hover:border-blue-300 transition-colors px-3 py-2"
+            @click="selectedSpecialty = s.value"
+          >
+            <div class="font-semibold text-black text-sm">{{ s.label }}</div>
+          </button>
+        </div>
+      </div>
     </div>
   </UCard>
 

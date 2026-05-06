@@ -71,6 +71,7 @@ public class ReviewService {
         review.setRating(dto.getRating());
         review.setText(dto.getText());
         review.setStatus("PENDING");
+        review.setModeratorComment(null);
         return toDTO(reviewRepository.save(review), userId);
     }
 
@@ -125,17 +126,19 @@ public class ReviewService {
     public ReviewDTO approveReview(UUID reviewId) {
         Review review = findById(reviewId);
         review.setStatus("APPROVED");
+        review.setModeratorComment(null);
         ReviewDTO result = toDTO(reviewRepository.save(review), null);
         log.info("Рецензия одобрена модератором: id={}", reviewId);
         return result;
     }
 
     @Transactional
-    public ReviewDTO rejectReview(UUID reviewId) {
+    public ReviewDTO rejectReview(UUID reviewId, String moderatorComment) {
         Review review = findById(reviewId);
         review.setStatus("REJECTED");
+        review.setModeratorComment(moderatorComment);
         ReviewDTO result = toDTO(reviewRepository.save(review), null);
-        log.info("Рецензия отклонена модератором: id={}", reviewId);
+        log.info("Рецензия отклонена модератором: id={}, comment='{}'", reviewId, moderatorComment);
         return result;
     }
 
@@ -165,6 +168,7 @@ public class ReviewService {
                 .rating(r.getRating())
                 .text(r.getText())
                 .status(r.getStatus())
+                .moderatorComment(r.getModeratorComment())
                 .likes(likes)
                 .liked(liked)
                 .createdAt(r.getCreatedAt())

@@ -5,23 +5,39 @@ import { api } from '../../api.js';
 
 // ── Data ────────────────────────────────────────────────────────────────────
 const collections = ref([]);
+const subjectCollections = ref([]);
 const allBooks = ref([]);
 const loading = ref(true);
 
-onMounted(async () => {
+async function loadAll() {
+  loading.value = true;
   try {
-    const [myCollections, booksPage] = await Promise.all([
+    const [myCollections, mySubjectCollections, booksPage] = await Promise.all([
       api.get('/collections/my'),
-      api.get('/books?size=100'),
+      api.get('/subject-collections/my'),
+      api.get('/books?size=200'),
     ]);
     collections.value = myCollections || [];
+    subjectCollections.value = mySubjectCollections || [];
     allBooks.value = booksPage.content || [];
   } catch (e) {
     console.error('Ошибка загрузки:', e);
   } finally {
     loading.value = false;
   }
-});
+}
+
+onMounted(loadAll);
+
+async function deleteSubjectCollection(sc) {
+  if (!window.confirm(`Удалить учебную подборку «${sc.title}»? Действие необратимо.`)) return;
+  try {
+    await api.delete(`/subject-collections/${sc.id}`);
+    subjectCollections.value = subjectCollections.value.filter(x => x.id !== sc.id);
+  } catch (e) {
+    alert(e.message || 'Не удалось удалить');
+  }
+}
 
 const booksById = computed(() => Object.fromEntries(allBooks.value.map(b => [b.id, b])));
 
@@ -208,8 +224,73 @@ async function saveEdit() {
     editOpen.value = false;
   } catch (e) {
     console.error('Ошибка сохранения:', e);
+    alert(e.message || 'Не удалось сохранить');
   } finally {
     editSaving.value = false;
+  }
+}
+
+// ── Subject collection edit ─────────────────────────────────────────────────
+const subjectEditOpen = ref(false);
+const subjectEditTarget = ref(null);
+const subjectEditTitle = ref('');
+const subjectEditDescription = ref('');
+const subjectEditQuery = ref('');
+const subjectEditSelectedIds = ref([]);
+const subjectEditSaving = ref(false);
+const subjectEditError = ref(null);
+
+const filteredCatalogForSubjectEdit = computed(() => {
+  const q = subjectEditQuery.value.trim().toLowerCase();
+  const base = availableBooks(subjectEditSelectedIds.value);
+  if (!q) return base;
+  return base.filter(
+    b =>
+      (b.title || '').toLowerCase().includes(q) ||
+      (b.author || '').toLowerCase().includes(q) ||
+      (b.description || '').toLowerCase().includes(q),
+  );
+});
+
+function openSubjectEdit(sc) {
+  subjectEditTarget.value = sc;
+  subjectEditTitle.value = sc.title;
+  subjectEditDescription.value = sc.description || '';
+  subjectEditSelectedIds.value = [...(sc.bookIds || [])];
+  subjectEditQuery.value = '';
+  subjectEditError.value = null;
+  subjectEditOpen.value = true;
+}
+
+async function saveSubjectEdit() {
+  const target = subjectEditTarget.value;
+  if (!target) return;
+  const nextTitle = subjectEditTitle.value.trim();
+  if (!nextTitle) {
+    subjectEditError.value = 'Введите название подборки';
+    return;
+  }
+  if (subjectEditSelectedIds.value.length === 0) {
+    subjectEditError.value = 'Добавьте хотя бы одну книгу';
+    return;
+  }
+  subjectEditSaving.value = true;
+  subjectEditError.value = null;
+  try {
+    const updated = await api.put(`/subject-collections/${target.id}`, {
+      subject: target.subject,
+      specialty: target.specialty,
+      specialtyName: target.specialtyName || target.specialty,
+      title: nextTitle,
+      description: subjectEditDescription.value.trim() || null,
+      bookIds: subjectEditSelectedIds.value,
+    });
+    subjectCollections.value = subjectCollections.value.map(x => x.id === target.id ? updated : x);
+    subjectEditOpen.value = false;
+  } catch (e) {
+    subjectEditError.value = e.message || 'Не удалось сохранить';
+  } finally {
+    subjectEditSaving.value = false;
   }
 }
 
@@ -271,6 +352,13 @@ function statusClass(status) {
 }
 
 function isEditable(status) {
+  // PENDING is locked while moderator reviews; everything else is editable.
+  // Editing an APPROVED collection sends it back through moderation on the backend.
+  return status !== 'PENDING';
+}
+
+function isPublishable(status) {
+  // Only DRAFT and REJECTED need a manual "publish" action; APPROVED already lives in moderation flow.
   return status === 'DRAFT' || status === 'REJECTED';
 }
 
@@ -384,7 +472,7 @@ async function createCollection() {
               Подробнее
             </UButton>
             <UButton
-              v-if="isEditable(c.status)"
+              v-if="isPublishable(c.status)"
               size="sm"
               color="green"
               :loading="publishingId === c.id"
@@ -395,7 +483,7 @@ async function createCollection() {
               Отправить на модерацию
             </UButton>
             <UButton
-              v-if="!isEditable(c.status)"
+              v-if="c.status !== 'DRAFT'"
               size="sm"
               color="error"
               variant="soft"
@@ -411,6 +499,93 @@ async function createCollection() {
       <UAlert v-if="publishError" color="error" variant="soft" :description="publishError" class="mt-4" />
 
       <div v-if="!loading && collections.length === 0" class="bg-white rounded-2xl p-6 text-black">Подборок пока нет. Создайте первую.</div>
+
+      <!-- Мои учебные подборки (subject collections) -->
+      <div class="mt-12">
+        <div class="flex items-center justify-between gap-4 mb-6">
+          <h2 class="text-3xl font-bold text-black">Мои учебные подборки</h2>
+          <UButton variant="outline" class="rounded-xl" to="/?tab=subjects">Создать на вкладке «Предметы»</UButton>
+        </div>
+
+        <div
+          v-if="!loading && subjectCollections.length"
+          class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 auto-rows-fr"
+        >
+          <UCard
+            v-for="sc in subjectCollections"
+            :key="sc.id"
+            variant="soft"
+            class="hover:shadow-xl transition-all duration-300 rounded-2xl bg-white flex flex-col h-full"
+          >
+            <div class="flex flex-col">
+              <div class="flex items-center justify-between gap-2">
+                <span class="inline-flex px-3 py-0.5 text-xs font-medium rounded-full bg-blue-100 text-blue-700">
+                  {{ sc.specialty }}
+                </span>
+                <span class="inline-flex px-3 py-0.5 text-xs font-medium rounded-full" :class="statusClass(sc.status)">
+                  {{ statusLabel(sc.status) }}
+                </span>
+              </div>
+
+              <div class="mt-3">
+                <p class="text-xs text-gray-500">Предмет:</p>
+                <p class="font-semibold text-black break-words" style="overflow-wrap: anywhere">{{ sc.subject }}</p>
+              </div>
+
+              <h3 class="mt-3 text-lg font-extrabold text-black line-clamp-2 break-words" style="overflow-wrap: anywhere">
+                {{ sc.title }}
+              </h3>
+
+              <p
+                v-if="sc.description"
+                class="mt-2 text-sm text-gray-700 line-clamp-3 break-words"
+                style="overflow-wrap: anywhere"
+              >
+                {{ sc.description }}
+              </p>
+
+              <p class="mt-2 text-xs text-gray-500">Книг: {{ (sc.bookIds || []).length }}</p>
+
+              <p
+                v-if="sc.status === 'REJECTED' && sc.moderatorComment"
+                class="mt-2 text-xs text-red-700 bg-red-50 p-2 rounded break-words"
+                style="overflow-wrap: anywhere"
+              >
+                <span class="font-semibold">Причина отказа:</span> {{ sc.moderatorComment }}
+              </p>
+            </div>
+
+            <div class="flex flex-wrap gap-2 justify-center mt-auto pt-4">
+              <UButton
+                v-if="sc.status !== 'PENDING'"
+                size="sm"
+                color="primary"
+                class="flex-1 justify-center"
+                @click="openSubjectEdit(sc)"
+              >
+                Редактировать
+              </UButton>
+              <UButton size="sm" color="error" variant="soft" class="flex-1 justify-center" @click="deleteSubjectCollection(sc)">
+                Удалить
+              </UButton>
+              <p
+                v-if="sc.status === 'APPROVED'"
+                class="w-full text-xs text-gray-500 text-center mt-1"
+              >
+                Изменения отправят подборку на повторную модерацию.
+              </p>
+            </div>
+          </UCard>
+        </div>
+
+        <div
+          v-else-if="!loading"
+          class="bg-white rounded-2xl p-6 text-black text-center"
+        >
+          У вас пока нет учебных подборок. Создать новую можно во вкладке
+          <router-link to="/?tab=subjects" class="underline">«Предметы»</router-link>.
+        </div>
+      </div>
     </div>
   </div>
 
@@ -532,6 +707,12 @@ async function createCollection() {
   <UModal v-model:open="editOpen" title="Редактировать подборку" class="z-100">
     <template #body>
       <div class="space-y-5">
+        <UAlert
+          v-if="(collections.find(c => c.id === editingCollectionId) || {}).status === 'APPROVED'"
+          color="warning"
+          variant="soft"
+          description="После сохранения подборка снова отправится на модерацию администратора."
+        />
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <UFormField label="Название" class="w-full">
             <UInput v-model="editTitle" placeholder="Название подборки" class="w-full" />
@@ -645,6 +826,83 @@ async function createCollection() {
           <UButton variant="outline" @click="editOpen = false">Отмена</UButton>
           <UButton :loading="editSaving" class="bg-green-300 text-black rounded-xl" @click="saveEdit"> Сохранить </UButton>
         </div>
+      </div>
+    </template>
+  </UModal>
+
+  <!-- Subject collection edit modal -->
+  <UModal v-model:open="subjectEditOpen" title="Редактировать учебную подборку" class="z-100">
+    <template #body>
+      <div v-if="subjectEditTarget" class="space-y-5">
+        <UAlert
+          v-if="subjectEditTarget.status === 'APPROVED'"
+          color="warning"
+          variant="soft"
+          description="После сохранения подборка снова отправится на модерацию администратора."
+        />
+        <p class="text-sm text-gray-600">
+          Предмет: <span class="font-semibold text-black">{{ subjectEditTarget.subject }}</span>,
+          специальность: <span class="font-semibold text-black">{{ subjectEditTarget.specialty }}</span>
+        </p>
+
+        <UFormField label="Название подборки">
+          <UInput v-model="subjectEditTitle" placeholder="Название подборки" />
+        </UFormField>
+        <UFormField label="Описание">
+          <UTextarea v-model="subjectEditDescription" :rows="3" placeholder="Что объединяет книги в подборке" />
+        </UFormField>
+
+        <div class="rounded-2xl border border-gray-200 bg-white p-4">
+          <div class="flex items-center justify-between mb-3">
+            <h3 class="font-semibold text-black">Книги</h3>
+            <p class="text-xs text-gray-500">Выбрано: {{ subjectEditSelectedIds.length }}</p>
+          </div>
+          <UInput v-model="subjectEditQuery" placeholder="Поиск по названию или автору..." class="w-full mb-3" />
+
+          <div v-if="subjectEditSelectedIds.length" class="mb-3 flex flex-wrap gap-2">
+            <button
+              v-for="b in selectedBooks(subjectEditSelectedIds)"
+              :key="b.id"
+              type="button"
+              class="px-2 py-1 rounded-full bg-blue-100 text-blue-700 text-xs hover:bg-blue-200"
+              @click="subjectEditSelectedIds = subjectEditSelectedIds.filter(id => id !== b.id)"
+            >
+              {{ b.title }} ✕
+            </button>
+          </div>
+
+          <div class="space-y-2 max-h-[280px] overflow-auto pr-1">
+            <button
+              v-for="b in filteredCatalogForSubjectEdit"
+              :key="b.id"
+              type="button"
+              class="w-full text-left p-2 rounded-xl border border-gray-200 bg-white hover:bg-gray-50"
+              @click="subjectEditSelectedIds = [...subjectEditSelectedIds, b.id]"
+            >
+              <div class="flex items-start gap-3">
+                <img class="w-10 h-14 object-cover rounded bg-gray-100 flex-none" :src="b.coverUrl || b.imageUrl || ''" :alt="b.title" />
+                <div>
+                  <div class="font-semibold text-black text-sm line-clamp-1">{{ b.title }}</div>
+                  <div class="text-xs text-gray-600 mt-0.5">{{ b.author }}</div>
+                </div>
+              </div>
+            </button>
+            <div v-if="filteredCatalogForSubjectEdit.length === 0" class="text-sm text-gray-500 text-center py-2">
+              Все книги добавлены
+            </div>
+          </div>
+        </div>
+
+        <UAlert v-if="subjectEditError" color="error" variant="soft" :description="subjectEditError" />
+      </div>
+    </template>
+
+    <template #footer>
+      <div class="flex justify-end gap-3 w-full">
+        <UButton variant="outline" @click="subjectEditOpen = false">Отмена</UButton>
+        <UButton :loading="subjectEditSaving" class="bg-green-300 text-black rounded-xl" @click="saveSubjectEdit">
+          Сохранить
+        </UButton>
       </div>
     </template>
   </UModal>

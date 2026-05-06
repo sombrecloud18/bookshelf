@@ -341,6 +341,14 @@ function goToBook(bookId) {
                   <p class="text-gray-700 whitespace-pre-wrap break-words" style="overflow-wrap: anywhere">
                     {{ review.text }}
                   </p>
+                  <div
+                    v-if="review.status === 'REJECTED' && review.moderatorComment"
+                    class="mt-3 p-3 rounded-lg bg-red-50 border border-red-200 text-sm text-red-800"
+                  >
+                    <p class="font-semibold mb-1">Причина отклонения:</p>
+                    <p class="whitespace-pre-wrap break-words" style="overflow-wrap: anywhere">{{ review.moderatorComment }}</p>
+                    <p class="mt-2 text-xs text-red-700">Внесите изменения и сохраните — рецензия снова уйдёт на модерацию.</p>
+                  </div>
                 </div>
               </div>
 

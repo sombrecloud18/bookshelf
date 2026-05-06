@@ -38,6 +38,9 @@ public class Review {
     @Column(nullable = false, length = 20)
     private String status = "PENDING";
 
+    @Column(name = "moderator_comment", columnDefinition = "TEXT")
+    private String moderatorComment;
+
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)
     private OffsetDateTime createdAt;

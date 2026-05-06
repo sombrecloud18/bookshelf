@@ -26,8 +26,9 @@ public class SubjectCollectionService {
     public static final String STATUS_APPROVED = "APPROVED";
     public static final String STATUS_REJECTED = "REJECTED";
 
-    /** Authors may edit only freshly created or rejected items; PENDING/APPROVED are locked. */
-    private static final Set<String> EDITABLE_STATUSES = Set.of(STATUS_REJECTED);
+    /** Authors may edit rejected items (to address feedback) or approved ones
+     *  (re-moderation kicks in automatically). PENDING is locked while the moderator is reviewing. */
+    private static final Set<String> EDITABLE_STATUSES = Set.of(STATUS_REJECTED, STATUS_APPROVED);
 
     private final SubjectCollectionRepository subjectCollectionRepository;
     private final BookRepository bookRepository;
@@ -65,8 +66,7 @@ public class SubjectCollectionService {
             throw AppException.forbidden("Вы не можете редактировать чужую подборку");
         }
         if (!EDITABLE_STATUSES.contains(sc.getStatus())) {
-            throw AppException.badRequest("Подборку нельзя править после отправки на модерацию. " +
-                    "Удалите её и создайте заново или дождитесь решения модератора.");
+            throw AppException.badRequest("Подборка сейчас на модерации — дождитесь решения, прежде чем её править.");
         }
 
         if (dto.getSubject() != null) sc.setSubject(dto.getSubject());

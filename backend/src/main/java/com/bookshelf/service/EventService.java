@@ -2,6 +2,7 @@ package com.bookshelf.service;
 
 import com.bookshelf.dto.event.CreateEventDTO;
 import com.bookshelf.dto.event.EventDTO;
+import com.bookshelf.dto.event.EventStateDTO;
 import com.bookshelf.entity.Event;
 import com.bookshelf.entity.EventParticipant;
 import com.bookshelf.entity.User;
@@ -13,6 +14,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -26,6 +28,7 @@ public class EventService {
     private final EventRepository eventRepository;
     private final EventParticipantRepository eventParticipantRepository;
     private final UserRepository userRepository;
+    private final SimpMessagingTemplate messagingTemplate;
 
     @Transactional(readOnly = true)
     public Page<EventDTO> getUpcomingEvents(Pageable pageable) {
@@ -113,6 +116,7 @@ public class EventService {
 
         eventParticipantRepository.save(participant);
         log.info("Пользователь зарегистрирован на мероприятие: userId={}, eventId={}", userId, eventId);
+        broadcastState(event);
     }
 
     @Transactional
@@ -122,6 +126,17 @@ public class EventService {
         }
         eventParticipantRepository.deleteByEventIdAndUserId(eventId, userId);
         log.info("Пользователь отменил регистрацию: userId={}, eventId={}", userId, eventId);
+        eventRepository.findById(eventId).ifPresent(this::broadcastState);
+    }
+
+    private void broadcastState(Event event) {
+        long count = eventParticipantRepository.countByEventId(event.getId());
+        EventStateDTO payload = EventStateDTO.builder()
+                .eventId(event.getId())
+                .currentParticipants(count)
+                .maxParticipants(event.getMaxParticipants())
+                .build();
+        messagingTemplate.convertAndSend("/topic/events/" + event.getId(), payload);
     }
 
     @Transactional(readOnly = true)

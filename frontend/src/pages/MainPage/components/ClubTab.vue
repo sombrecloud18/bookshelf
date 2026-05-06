@@ -1,6 +1,7 @@
 <script setup>
-import { computed, ref, watch } from 'vue';
+import { computed, ref, watch, onUnmounted } from 'vue';
 import { api } from '../../../api.js';
+import { subscribeStomp } from '../../../composables/useStomp.js';
 
 const props = defineProps({
   items: { type: Array, default: () => [] },
@@ -9,8 +10,30 @@ const props = defineProps({
 // Local mirror of the participant counts and registration state, keyed by event id.
 const stateById = ref({});
 
+// Active STOMP subscriptions keyed by event id, so we can clean them up
+// when items disappear or the component unmounts.
+const subscriptions = new Map();
+
+function subscribeTo(eventId) {
+  if (subscriptions.has(eventId)) return;
+  const topic = `/topic/events/${eventId}`;
+  const dispose = subscribeStomp(topic, (payload) => {
+    const slot = stateById.value[eventId];
+    if (!slot) return;
+    if (typeof payload?.currentParticipants === 'number') {
+      slot.count = payload.currentParticipants;
+    }
+    if (payload?.maxParticipants != null) {
+      slot.max = payload.maxParticipants;
+    }
+  });
+  subscriptions.set(eventId, dispose);
+}
+
 watch(() => props.items, (items) => {
+  const seen = new Set();
   for (const item of items) {
+    seen.add(item.id);
     if (!stateById.value[item.id]) {
       stateById.value[item.id] = {
         count: typeof item.participantsCount === 'number' ? item.participantsCount : 0,
@@ -23,8 +46,21 @@ watch(() => props.items, (items) => {
         : stateById.value[item.id].count;
       stateById.value[item.id].max = item.maxParticipants ?? stateById.value[item.id].max;
     }
+    subscribeTo(item.id);
+  }
+  // Drop subscriptions for events that no longer exist in props.items.
+  for (const [eventId, dispose] of subscriptions) {
+    if (!seen.has(eventId)) {
+      dispose();
+      subscriptions.delete(eventId);
+    }
   }
 }, { immediate: true });
+
+onUnmounted(() => {
+  subscriptions.forEach((dispose) => dispose());
+  subscriptions.clear();
+});
 
 const open = ref(false);
 const selectedId = ref(null);

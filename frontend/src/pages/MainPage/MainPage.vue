@@ -126,8 +126,18 @@ watch(() => route.query.tab, (val) => {
   }
 });
 
+function loadForTab(tab) {
+  if (tab === 'catalog') loadBooks(query.value);
+  else if (tab === 'collections') loadCollections(query.value);
+  else if (tab === 'club') loadEvents();
+  // Recommendations and Subjects manage their own data inside the child component.
+}
+
 onMounted(() => {
+  // Always populate the catalog so collections that reference book covers can
+  // resolve them, and load whichever tab the URL points at.
   loadBooks();
+  if (activeTab.value !== 'catalog') loadForTab(activeTab.value);
 });
 </script>
 

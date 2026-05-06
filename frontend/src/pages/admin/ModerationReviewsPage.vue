@@ -40,15 +40,33 @@ async function approveReview(id) {
   }
 }
 
-async function rejectReview(id) {
-  const review = reviewsQueue.value.find(r => r.id === id);
-  if (!confirm(`Отклонить рецензию на книгу «${review?.bookTitle}»?`)) return;
+const showRejectModal = ref(false);
+const rejectingReview = ref(null);
+const rejectReason = ref('');
+const rejectError = ref(null);
+
+function openRejectModal(review) {
+  rejectingReview.value = review;
+  rejectReason.value = '';
+  rejectError.value = null;
+  showRejectModal.value = true;
+}
+
+async function confirmReject() {
+  if (!rejectReason.value.trim()) {
+    rejectError.value = 'Укажите причину отклонения, чтобы автор смог исправить рецензию';
+    return;
+  }
   try {
-    await api.post(`/reviews/${id}/reject`);
-    reviewsQueue.value = reviewsQueue.value.filter(r => r.id !== id);
+    await api.post(`/reviews/${rejectingReview.value.id}/reject`, {
+      moderatorComment: rejectReason.value.trim(),
+    });
+    reviewsQueue.value = reviewsQueue.value.filter(r => r.id !== rejectingReview.value.id);
+    showRejectModal.value = false;
     showDetailsModal.value = false;
+    rejectingReview.value = null;
   } catch (e) {
-    console.error('Ошибка отклонения:', e);
+    rejectError.value = e.message || 'Не удалось отклонить рецензию';
   }
 }
 </script>
@@ -98,7 +116,7 @@ async function rejectReview(id) {
                 />
               </div>
 
-              <div class="flex-1">
+              <div class="flex-1 min-w-0">
                 <div class="flex flex-wrap items-start justify-between gap-2">
                   <div>
                     <div class="flex items-center gap-2 flex-wrap">
@@ -122,7 +140,7 @@ async function rejectReview(id) {
                   </div>
                 </div>
 
-                <p class="mt-3 text-sm text-gray-700 line-clamp-3">{{ review.text }}</p>
+                <p class="mt-3 text-sm text-gray-700 line-clamp-3 break-words" style="overflow-wrap: anywhere">{{ review.text }}</p>
 
                 <div class="mt-3 flex flex-wrap items-center justify-between gap-3">
                   <p class="text-xs text-gray-500">
@@ -136,7 +154,7 @@ async function rejectReview(id) {
                     <UButton size="sm" color="green" class="rounded-xl" @click="approveReview(review.id)">
                       Одобрить
                     </UButton>
-                    <UButton size="sm" color="red" variant="soft" class="rounded-xl" @click="rejectReview(review.id)">
+                    <UButton size="sm" color="red" variant="soft" class="rounded-xl" @click="openRejectModal(review)">
                       Отклонить
                     </UButton>
                   </div>
@@ -158,7 +176,7 @@ async function rejectReview(id) {
                   :src="selectedReview.coverUrl || ''"
                   :alt="selectedReview.bookTitle"
                 />
-                <div class="flex-1">
+                <div class="flex-1 min-w-0">
                   <div class="flex items-center gap-2 flex-wrap">
                     <h2 class="text-2xl font-bold text-black">{{ selectedReview.bookTitle }}</h2>
                     <span
@@ -191,7 +209,7 @@ async function rejectReview(id) {
             <div class="bg-white rounded-2xl border border-gray-200 p-5">
               <h3 class="font-semibold text-black mb-3">Текст рецензии</h3>
               <div class="bg-gray-50 p-4 rounded-lg">
-                <p class="text-gray-700 whitespace-pre-wrap leading-relaxed">{{ selectedReview.text }}</p>
+                <p class="text-gray-700 whitespace-pre-wrap leading-relaxed break-words" style="overflow-wrap: anywhere">{{ selectedReview.text }}</p>
               </div>
             </div>
           </div>
@@ -201,9 +219,34 @@ async function rejectReview(id) {
           <div class="flex justify-between gap-3 w-full">
             <div class="flex gap-2">
               <UButton color="green" class="rounded-xl" @click="approveReview(selectedReview?.id)">Одобрить</UButton>
-              <UButton color="red" variant="soft" class="rounded-xl" @click="rejectReview(selectedReview?.id)">Отклонить</UButton>
+              <UButton color="red" variant="soft" class="rounded-xl" @click="openRejectModal(selectedReview)">Отклонить</UButton>
             </div>
             <UButton variant="outline" @click="showDetailsModal = false">Закрыть</UButton>
+          </div>
+        </template>
+      </UModal>
+
+      <UModal v-model:open="showRejectModal" class="z-100">
+        <template #body>
+          <div v-if="rejectingReview" class="space-y-3">
+            <h3 class="text-xl font-bold text-black">Отклонить рецензию</h3>
+            <p class="text-sm text-gray-600">
+              Рецензия на «{{ rejectingReview.bookTitle }}» — укажите причину отклонения,
+              чтобы автор мог исправить и переотправить.
+            </p>
+            <UTextarea
+              v-model="rejectReason"
+              :rows="4"
+              placeholder="Например: текст рецензии не раскрывает книгу, оценка не соответствует тексту..."
+              class="w-full"
+            />
+            <UAlert v-if="rejectError" color="error" variant="soft" :description="rejectError" />
+          </div>
+        </template>
+        <template #footer>
+          <div class="flex justify-end gap-3 w-full">
+            <UButton variant="outline" @click="showRejectModal = false">Отмена</UButton>
+            <UButton color="red" @click="confirmReject">Отклонить</UButton>
           </div>
         </template>
       </UModal>

@@ -24,6 +24,7 @@ public class ReviewDTO {
     private Integer rating;
     private String text;
     private String status;
+    private String moderatorComment;
     private Long likes;
     private Boolean liked;
     private OffsetDateTime createdAt;

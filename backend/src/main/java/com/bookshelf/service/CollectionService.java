@@ -27,8 +27,9 @@ public class CollectionService {
     public static final String STATUS_APPROVED = "APPROVED";
     public static final String STATUS_REJECTED = "REJECTED";
 
-    /** Statuses where the author may still edit / delete the collection. */
-    private static final Set<String> EDITABLE_STATUSES = Set.of(STATUS_DRAFT, STATUS_REJECTED);
+    /** Statuses where the author may still edit / delete the collection.
+     *  APPROVED is included: editing a published collection sends it back to PENDING for re-moderation. */
+    private static final Set<String> EDITABLE_STATUSES = Set.of(STATUS_DRAFT, STATUS_REJECTED, STATUS_APPROVED);
 
     private final CollectionRepository collectionRepository;
     private final BookRepository bookRepository;
@@ -73,9 +74,13 @@ public class CollectionService {
         collection.getCollectionBooks().clear();
         attachBooks(collection, dto.getBookIds());
 
-        // After editing a previously rejected collection it returns to DRAFT until the author re-submits.
+        // Editing a rejected collection drops it back to DRAFT (author resubmits manually).
+        // Editing an already-published one is treated as a new submission — straight to PENDING.
         if (STATUS_REJECTED.equals(collection.getStatus())) {
             collection.setStatus(STATUS_DRAFT);
+            collection.setModeratorComment(null);
+        } else if (STATUS_APPROVED.equals(collection.getStatus())) {
+            collection.setStatus(STATUS_PENDING);
             collection.setModeratorComment(null);
         }
 
