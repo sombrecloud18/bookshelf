@@ -163,53 +163,58 @@ async function confirmReject() {
 
       <!-- Детали подборки -->
       <UModal v-model:open="showDetailsModal" class="z-100">
-        <div v-if="selectedCollection" class="bg-white rounded-2xl max-w-2xl mx-auto">
-          <div class="p-6">
-            <h2 class="text-2xl font-bold text-black mb-4">{{ selectedCollection.title }}</h2>
-            <div class="space-y-3">
-              <p><span class="font-semibold">Предмет:</span> {{ selectedCollection.subject }}</p>
-              <p><span class="font-semibold">Специальность:</span> {{ selectedCollection.specialtyName || selectedCollection.specialty }}</p>
-              <p>
-                <span class="font-semibold">Автор:</span> {{ selectedCollection.author }} ({{
-                  selectedCollection.authorRole === 'teacher' ? 'Преподаватель' : 'Студент'
-                }})
+        <template #body>
+          <div v-if="selectedCollection" class="space-y-3">
+            <h2 class="text-2xl font-bold text-black">{{ selectedCollection.title }}</h2>
+            <p><span class="font-semibold">Предмет:</span> {{ selectedCollection.subject }}</p>
+            <p>
+              <span class="font-semibold">Специальность:</span>
+              {{ selectedCollection.specialtyName || selectedCollection.specialty }}
+            </p>
+            <p>
+              <span class="font-semibold">Автор:</span> {{ selectedCollection.author }} ({{
+                selectedCollection.authorRole === 'TEACHER' ? 'Преподаватель' : 'Студент'
+              }})
+            </p>
+            <p><span class="font-semibold">Дата создания:</span> {{ formatDate(selectedCollection.createdAt) }}</p>
+            <div>
+              <p class="font-semibold">Описание:</p>
+              <p class="text-gray-700 bg-gray-50 p-3 rounded-lg mt-1 break-words" style="overflow-wrap: anywhere">
+                {{ selectedCollection.description }}
               </p>
-              <p><span class="font-semibold">Дата создания:</span> {{ formatDate(selectedCollection.createdAt) }}</p>
-              <div>
-                <p class="font-semibold">Описание:</p>
-                <p class="text-gray-700 bg-gray-50 p-3 rounded-lg mt-1">{{ selectedCollection.description }}</p>
-              </div>
-              <div>
-                <p class="font-semibold mb-2">Книги в подборке ({{ booksInCollection.length }})</p>
-                <div class="space-y-2 max-h-64 overflow-auto">
-                  <div
-                    v-for="book in booksInCollection"
-                    :key="book.id"
-                    class="flex items-center gap-3 p-2 bg-gray-50 rounded-lg"
-                  >
-                    <img
-                      class="w-10 h-14 object-cover rounded bg-gray-100"
-                      :src="book.coverUrl || book.imageUrl || ''"
-                      :alt="book.title"
-                    />
-                    <span class="font-medium">{{ book.title }}</span>
-                  </div>
+            </div>
+            <div>
+              <p class="font-semibold mb-2">Книги в подборке ({{ booksInCollection.length }})</p>
+              <div class="space-y-2 max-h-64 overflow-auto pr-1">
+                <div
+                  v-for="book in booksInCollection"
+                  :key="book.id"
+                  class="flex items-center gap-3 p-2 bg-gray-50 rounded-lg"
+                >
+                  <img
+                    class="w-10 h-14 object-cover rounded bg-gray-100 flex-none"
+                    :src="book.coverUrl || book.imageUrl || ''"
+                    :alt="book.title"
+                  />
+                  <span class="font-medium">{{ book.title }}</span>
                 </div>
               </div>
             </div>
           </div>
-          <div class="flex justify-end gap-3 p-6 border-t bg-gray-50 rounded-b-2xl">
+        </template>
+        <template #footer>
+          <div class="flex justify-end gap-3 w-full">
             <UButton variant="outline" @click="showDetailsModal = false">Закрыть</UButton>
           </div>
-        </div>
+        </template>
       </UModal>
 
       <!-- Причина отклонения -->
       <UModal v-model:open="showRejectModal" class="z-100">
-        <div class="bg-white rounded-2xl max-w-md mx-auto">
-          <div class="p-6">
-            <h3 class="text-xl font-bold text-black mb-2">Отклонить подборку</h3>
-            <p class="text-gray-600 mb-4">Укажите причину отклонения:</p>
+        <template #body>
+          <div class="space-y-3">
+            <h3 class="text-xl font-bold text-black">Отклонить подборку</h3>
+            <p class="text-gray-600">Укажите причину отклонения, чтобы автор мог исправить:</p>
             <UTextarea
               v-model="rejectReason"
               :rows="4"
@@ -217,11 +222,13 @@ async function confirmReject() {
               class="w-full"
             />
           </div>
-          <div class="flex justify-end gap-3 p-6 border-t bg-gray-50 rounded-b-2xl">
+        </template>
+        <template #footer>
+          <div class="flex justify-end gap-3 w-full">
             <UButton variant="outline" @click="showRejectModal = false">Отмена</UButton>
             <UButton color="red" @click="confirmReject">Отклонить</UButton>
           </div>
-        </div>
+        </template>
       </UModal>
     </div>
   </div>

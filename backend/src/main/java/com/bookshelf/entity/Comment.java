@@ -28,6 +28,10 @@ public class Comment {
     @JoinColumn(name = "collection_id")
     private Collection collection;
 
+    @ManyToOne(fetch = FetchType.EAGER)
+    @JoinColumn(name = "subject_collection_id")
+    private SubjectCollection subjectCollection;
+
     @ManyToOne(fetch = FetchType.EAGER, optional = false)
     @JoinColumn(name = "user_id", nullable = false)
     private User user;

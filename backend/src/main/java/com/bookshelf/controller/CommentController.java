@@ -39,6 +39,14 @@ public class CommentController {
         return ResponseEntity.ok(commentService.addCommentToCollection(userId, collectionId, dto));
     }
 
+    @PostMapping("/subject-collection/{subjectCollectionId}")
+    public ResponseEntity<CommentDTO> addToSubjectCollection(
+            @AuthenticationPrincipal UUID userId,
+            @PathVariable UUID subjectCollectionId,
+            @Valid @RequestBody CreateCommentDTO dto) {
+        return ResponseEntity.ok(commentService.addCommentToSubjectCollection(userId, subjectCollectionId, dto));
+    }
+
     @PutMapping("/{id}")
     public ResponseEntity<CommentDTO> updateComment(
             @AuthenticationPrincipal UUID userId,
@@ -68,6 +76,13 @@ public class CommentController {
             @AuthenticationPrincipal UUID viewerId,
             @PathVariable UUID collectionId) {
         return ResponseEntity.ok(commentService.getCommentsForCollection(collectionId, viewerId));
+    }
+
+    @GetMapping("/subject-collection/{subjectCollectionId}")
+    public ResponseEntity<List<CommentDTO>> getSubjectCollectionComments(
+            @AuthenticationPrincipal UUID viewerId,
+            @PathVariable UUID subjectCollectionId) {
+        return ResponseEntity.ok(commentService.getCommentsForSubjectCollection(subjectCollectionId, viewerId));
     }
 
     private boolean isModerator() {

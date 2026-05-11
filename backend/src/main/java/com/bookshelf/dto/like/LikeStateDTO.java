@@ -10,7 +10,7 @@ import java.util.UUID;
 /** Snapshot of likes for a target — used both as REST response and as STOMP broadcast payload. */
 @Data @Builder @NoArgsConstructor @AllArgsConstructor
 public class LikeStateDTO {
-    private String targetType; // REVIEW | COMMENT
+    private String targetType; // REVIEW | COMMENT | COLLECTION | SUBJECT_COLLECTION
     private UUID targetId;
     private long count;
     /** Whether the requesting user has liked. Null when broadcast (recipient-specific). */

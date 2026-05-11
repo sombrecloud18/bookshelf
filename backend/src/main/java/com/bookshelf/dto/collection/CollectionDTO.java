@@ -22,4 +22,6 @@ public class CollectionDTO {
     private String author;
     private String authorName;
     private OffsetDateTime createdAt;
+    private Long likes;
+    private Boolean liked;
 }

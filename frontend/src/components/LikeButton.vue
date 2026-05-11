@@ -3,7 +3,7 @@ import { onUnmounted, watch } from 'vue';
 import { useLikes } from '../composables/useLikes.js';
 
 const props = defineProps({
-  targetType: { type: String, required: true }, // 'REVIEW' | 'COMMENT'
+  targetType: { type: String, required: true }, // 'REVIEW' | 'COMMENT' | 'COLLECTION' | 'SUBJECT_COLLECTION'
   targetId: { type: String, required: true },
   initialCount: { type: Number, default: 0 },
   initialLiked: { type: Boolean, default: false },

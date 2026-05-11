@@ -61,11 +61,12 @@ public class SubjectCollectionController {
 
     @GetMapping
     public ResponseEntity<Page<SubjectCollectionDTO>> getApprovedCollections(
+            @AuthenticationPrincipal UUID viewerId,
             @RequestParam(required = false) String subject,
             @RequestParam(required = false) String specialty,
             @PageableDefault(size = 12) Pageable pageable) {
         log.debug("Учебные подборки: subject='{}', specialty='{}', page={}", subject, specialty, pageable.getPageNumber());
-        return ResponseEntity.ok(subjectCollectionService.getApprovedCollections(subject, specialty, pageable));
+        return ResponseEntity.ok(subjectCollectionService.getApprovedCollections(subject, specialty, pageable, viewerId));
     }
 
     @GetMapping("/my")

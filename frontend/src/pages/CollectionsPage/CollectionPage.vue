@@ -436,7 +436,7 @@ async function createCollection() {
           </div>
 
           <div class="aspect-2/3 w-full overflow-hidden rounded-lg mt-4 bg-gray-100 flex items-center justify-center">
-            <div class="relative h-[80%] w-[78%]">
+            <div class="relative isolate h-[80%] w-[78%]">
               <div v-if="(c.bookIds || []).length === 0" class="text-xs text-gray-500 text-center">Нет книг</div>
 
               <template v-else>

@@ -24,4 +24,6 @@ public class SubjectCollectionDTO {
     private String status;
     private OffsetDateTime createdAt;
     private String moderatorComment;
+    private Long likes;
+    private Boolean liked;
 }

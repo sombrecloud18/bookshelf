@@ -79,16 +79,19 @@ public class CollectionController {
 
     @GetMapping
     public ResponseEntity<Page<CollectionDTO>> getApprovedCollections(
+            @AuthenticationPrincipal UUID viewerId,
             @RequestParam(required = false) String query,
             @PageableDefault(size = 12) Pageable pageable) {
         log.debug("Список подборок: query='{}', page={}", query, pageable.getPageNumber());
-        return ResponseEntity.ok(collectionService.getApprovedCollections(query, pageable));
+        return ResponseEntity.ok(collectionService.getApprovedCollections(query, pageable, viewerId));
     }
 
     @GetMapping("/{id}")
-    public ResponseEntity<CollectionDTO> getCollection(@PathVariable UUID id) {
+    public ResponseEntity<CollectionDTO> getCollection(
+            @AuthenticationPrincipal UUID viewerId,
+            @PathVariable UUID id) {
         log.debug("Получение подборки: id={}", id);
-        return ResponseEntity.ok(collectionService.toDTO(collectionService.findById(id)));
+        return ResponseEntity.ok(collectionService.toDTO(collectionService.findById(id), viewerId));
     }
 
     @GetMapping("/pending")

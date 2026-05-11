@@ -34,6 +34,8 @@ public class CollectionService {
     private final CollectionRepository collectionRepository;
     private final BookRepository bookRepository;
     private final UserRepository userRepository;
+    private final CommentRepository commentRepository;
+    private final LikeService likeService;
 
     @Transactional
     public CollectionDTO createCollection(UUID userId, CreateCollectionDTO dto) {
@@ -95,6 +97,12 @@ public class CollectionService {
             throw AppException.forbidden("Вы не можете удалить чужую подборку");
         }
 
+        // The likes table is polymorphic (no FK to collections) so we clean it up manually
+        // — both the collection's own likes and likes on each of its comments.
+        likeService.deleteFor(LikeService.TARGET_COLLECTION, collectionId);
+        commentRepository.findByCollectionIdOrderByCreatedAtAsc(collectionId)
+                .forEach(c -> likeService.deleteFor(LikeService.TARGET_COMMENT, c.getId()));
+
         collectionRepository.delete(collection);
     }
 
@@ -122,15 +130,15 @@ public class CollectionService {
     @Transactional(readOnly = true)
     public List<CollectionDTO> getUserCollections(UUID userId) {
         return collectionRepository.findByUserId(userId)
-                .stream().map(this::toDTO).collect(Collectors.toList());
+                .stream().map(c -> toDTO(c, userId)).collect(Collectors.toList());
     }
 
     @Transactional(readOnly = true)
-    public Page<CollectionDTO> getApprovedCollections(String query, Pageable pageable) {
-        if (query != null && !query.isBlank()) {
-            return collectionRepository.searchByKeyword(query, pageable).map(this::toDTO);
-        }
-        return collectionRepository.findByStatus(STATUS_APPROVED, pageable).map(this::toDTO);
+    public Page<CollectionDTO> getApprovedCollections(String query, Pageable pageable, UUID viewerId) {
+        Page<Collection> page = (query != null && !query.isBlank())
+                ? collectionRepository.searchByKeyword(query, pageable)
+                : collectionRepository.findByStatus(STATUS_APPROVED, pageable);
+        return page.map(c -> toDTO(c, viewerId));
     }
 
     @Transactional(readOnly = true)
@@ -180,9 +188,17 @@ public class CollectionService {
     }
 
     public CollectionDTO toDTO(Collection c) {
+        return toDTO(c, null);
+    }
+
+    public CollectionDTO toDTO(Collection c, UUID viewerId) {
         List<UUID> bookIds = c.getCollectionBooks().stream()
                 .map(cb -> cb.getBook().getId())
                 .collect(Collectors.toList());
+
+        long likes = likeService.count(LikeService.TARGET_COLLECTION, c.getId());
+        boolean liked = viewerId != null && !likeService
+                .findLikedIds(viewerId, LikeService.TARGET_COLLECTION, List.of(c.getId())).isEmpty();
 
         return CollectionDTO.builder()
                 .id(c.getId())
@@ -196,6 +212,8 @@ public class CollectionService {
                 .author(c.getUser().getLogin())
                 .authorName(buildFullName(c.getUser()))
                 .createdAt(c.getCreatedAt())
+                .likes(likes)
+                .liked(liked)
                 .build();
     }
 

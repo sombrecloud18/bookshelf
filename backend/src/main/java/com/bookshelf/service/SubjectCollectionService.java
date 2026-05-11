@@ -33,6 +33,8 @@ public class SubjectCollectionService {
     private final SubjectCollectionRepository subjectCollectionRepository;
     private final BookRepository bookRepository;
     private final UserRepository userRepository;
+    private final CommentRepository commentRepository;
+    private final LikeService likeService;
 
     @Transactional
     public SubjectCollectionDTO createSubjectCollection(UUID userId, CreateSubjectCollectionDTO dto) {
@@ -91,20 +93,23 @@ public class SubjectCollectionService {
             throw AppException.forbidden("Вы не можете удалить чужую подборку");
         }
 
+        // Polymorphic likes are not FK-linked — clean them up explicitly.
+        likeService.deleteFor(LikeService.TARGET_SUBJECT_COLLECTION, id);
+        commentRepository.findBySubjectCollectionIdOrderByCreatedAtAsc(id)
+                .forEach(c -> likeService.deleteFor(LikeService.TARGET_COMMENT, c.getId()));
+
         subjectCollectionRepository.delete(sc);
     }
 
     @Transactional(readOnly = true)
-    public Page<SubjectCollectionDTO> getApprovedCollections(String subject, String specialty, Pageable pageable) {
+    public Page<SubjectCollectionDTO> getApprovedCollections(String subject, String specialty, Pageable pageable, UUID viewerId) {
         // Since subject names are globally unique now, filter by subject ALONE when it's
         // provided — collections for the same subject are shared across specialties
         // (per product spec: "общие предметы → общие подборки").
-        if (subject != null) {
-            return subjectCollectionRepository
-                    .findBySubjectAndStatus(subject, STATUS_APPROVED, pageable)
-                    .map(this::toDTO);
-        }
-        return subjectCollectionRepository.findByStatus(STATUS_APPROVED, pageable).map(this::toDTO);
+        Page<SubjectCollection> page = (subject != null)
+                ? subjectCollectionRepository.findBySubjectAndStatus(subject, STATUS_APPROVED, pageable)
+                : subjectCollectionRepository.findByStatus(STATUS_APPROVED, pageable);
+        return page.map(sc -> toDTO(sc, viewerId));
     }
 
     @Transactional(readOnly = true)
@@ -115,7 +120,7 @@ public class SubjectCollectionService {
     @Transactional(readOnly = true)
     public List<SubjectCollectionDTO> getUserCollections(UUID userId) {
         return subjectCollectionRepository.findByUserId(userId)
-                .stream().map(this::toDTO).collect(Collectors.toList());
+                .stream().map(sc -> toDTO(sc, userId)).collect(Collectors.toList());
     }
 
     @Transactional
@@ -158,9 +163,17 @@ public class SubjectCollectionService {
     }
 
     public SubjectCollectionDTO toDTO(SubjectCollection sc) {
+        return toDTO(sc, null);
+    }
+
+    public SubjectCollectionDTO toDTO(SubjectCollection sc, UUID viewerId) {
         List<UUID> bookIds = sc.getSubjectCollectionBooks().stream()
                 .map(scb -> scb.getBook().getId())
                 .collect(Collectors.toList());
+
+        long likes = likeService.count(LikeService.TARGET_SUBJECT_COLLECTION, sc.getId());
+        boolean liked = viewerId != null && !likeService
+                .findLikedIds(viewerId, LikeService.TARGET_SUBJECT_COLLECTION, List.of(sc.getId())).isEmpty();
 
         return SubjectCollectionDTO.builder()
                 .id(sc.getId())
@@ -176,6 +189,8 @@ public class SubjectCollectionService {
                 .status(sc.getStatus())
                 .createdAt(sc.getCreatedAt())
                 .moderatorComment(sc.getModeratorComment())
+                .likes(likes)
+                .liked(liked)
                 .build();
     }
 }

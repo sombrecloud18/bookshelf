@@ -3,9 +3,11 @@ package com.bookshelf.service;
 import com.bookshelf.dto.like.LikeStateDTO;
 import com.bookshelf.entity.Like;
 import com.bookshelf.exception.AppException;
+import com.bookshelf.repository.CollectionRepository;
 import com.bookshelf.repository.CommentRepository;
 import com.bookshelf.repository.LikeRepository;
 import com.bookshelf.repository.ReviewRepository;
+import com.bookshelf.repository.SubjectCollectionRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
@@ -26,10 +28,17 @@ public class LikeService {
 
     public static final String TARGET_REVIEW = "REVIEW";
     public static final String TARGET_COMMENT = "COMMENT";
+    public static final String TARGET_COLLECTION = "COLLECTION";
+    public static final String TARGET_SUBJECT_COLLECTION = "SUBJECT_COLLECTION";
+
+    private static final Set<String> ALLOWED_TYPES =
+            Set.of(TARGET_REVIEW, TARGET_COMMENT, TARGET_COLLECTION, TARGET_SUBJECT_COLLECTION);
 
     private final LikeRepository likeRepository;
     private final ReviewRepository reviewRepository;
     private final CommentRepository commentRepository;
+    private final CollectionRepository collectionRepository;
+    private final SubjectCollectionRepository subjectCollectionRepository;
     private final SimpMessagingTemplate messagingTemplate;
 
     @Transactional
@@ -105,17 +114,22 @@ public class LikeService {
 
     private String normalizeType(String targetType) {
         if (targetType == null) throw AppException.badRequest("targetType обязателен");
-        String upper = targetType.trim().toUpperCase();
-        if (!TARGET_REVIEW.equals(upper) && !TARGET_COMMENT.equals(upper)) {
+        // Accept the dashed variant from URL paths ("subject-collection") for ergonomics.
+        String upper = targetType.trim().toUpperCase().replace('-', '_');
+        if (!ALLOWED_TYPES.contains(upper)) {
             throw AppException.badRequest("Недопустимый тип лайка: " + targetType);
         }
         return upper;
     }
 
     private void ensureTargetExists(String type, UUID targetId) {
-        boolean exists = TARGET_REVIEW.equals(type)
-                ? reviewRepository.existsById(targetId)
-                : commentRepository.existsById(targetId);
+        boolean exists = switch (type) {
+            case TARGET_REVIEW -> reviewRepository.existsById(targetId);
+            case TARGET_COMMENT -> commentRepository.existsById(targetId);
+            case TARGET_COLLECTION -> collectionRepository.existsById(targetId);
+            case TARGET_SUBJECT_COLLECTION -> subjectCollectionRepository.existsById(targetId);
+            default -> false;
+        };
         if (!exists) {
             throw AppException.notFound("Цель лайка не найдена");
         }

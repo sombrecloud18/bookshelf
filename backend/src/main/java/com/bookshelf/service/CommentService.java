@@ -23,6 +23,7 @@ public class CommentService {
     private final CommentRepository commentRepository;
     private final ReviewRepository reviewRepository;
     private final CollectionRepository collectionRepository;
+    private final SubjectCollectionRepository subjectCollectionRepository;
     private final UserRepository userRepository;
     private final LikeService likeService;
 
@@ -51,6 +52,22 @@ public class CommentService {
 
         Comment comment = Comment.builder()
                 .collection(collection)
+                .user(user)
+                .text(dto.getText())
+                .build();
+
+        return toDTO(commentRepository.save(comment), userId);
+    }
+
+    @Transactional
+    public CommentDTO addCommentToSubjectCollection(UUID userId, UUID subjectCollectionId, CreateCommentDTO dto) {
+        SubjectCollection sc = subjectCollectionRepository.findById(subjectCollectionId)
+                .orElseThrow(() -> AppException.notFound("Учебная подборка не найдена"));
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> AppException.notFound("Пользователь не найден"));
+
+        Comment comment = Comment.builder()
+                .subjectCollection(sc)
                 .user(user)
                 .text(dto.getText())
                 .build();
@@ -96,6 +113,17 @@ public class CommentService {
     @Transactional(readOnly = true)
     public List<CommentDTO> getCommentsForCollection(UUID collectionId, UUID viewerId) {
         List<Comment> comments = commentRepository.findByCollectionIdOrderByCreatedAtAsc(collectionId);
+        Set<UUID> likedIds = likeService.findLikedIds(viewerId, LikeService.TARGET_COMMENT,
+                comments.stream().map(Comment::getId).collect(Collectors.toList()));
+        return comments.stream()
+                .map(c -> toDTO(c, likedIds.contains(c.getId()),
+                        likeService.count(LikeService.TARGET_COMMENT, c.getId())))
+                .collect(Collectors.toList());
+    }
+
+    @Transactional(readOnly = true)
+    public List<CommentDTO> getCommentsForSubjectCollection(UUID subjectCollectionId, UUID viewerId) {
+        List<Comment> comments = commentRepository.findBySubjectCollectionIdOrderByCreatedAtAsc(subjectCollectionId);
         Set<UUID> likedIds = likeService.findLikedIds(viewerId, LikeService.TARGET_COMMENT,
                 comments.stream().map(Comment::getId).collect(Collectors.toList()));
         return comments.stream()

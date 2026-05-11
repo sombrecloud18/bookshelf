@@ -36,7 +36,21 @@
       "Bash(export JAVA_HOME=\"/c/Users/Lenovo/.jdks/openjdk-21.0.2\")",
       "Bash(python3 -c \"import bcrypt; print\\(bcrypt.hashpw\\(b'admin123', bcrypt.gensalt\\(rounds=10\\)\\).decode\\(\\)\\)\")",
       "Bash(node -e \"const c=require\\('child_process'\\); c.execSync\\('npm list bcryptjs --prefix . 2>/dev/null', {stdio:'ignore'}\\); console.log\\('checking'\\);\")",
-      "Bash(node -e ' *)"
+      "Bash(node -e ' *)",
+      "Bash(docker-compose build *)",
+      "Bash(docker-compose up *)",
+      "Bash(docker-compose ps *)",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)",
+      "PowerShell(docker exec bookshelf-backend *)",
+      "PowerShell(docker exec bookshelf-frontend *)",
+      "PowerShell(Invoke-WebRequest -UseBasicParsing -Uri \"http://localhost:3000/files/avatars/8d583378-e315-4b9e-9569-40192e07c916.png\" -Method Head | Select-Object StatusCode, Headers)",
+      "PowerShell(Start-Sleep -Seconds 5; try { $r = Invoke-WebRequest -UseBasicParsing -Uri \"http://localhost:3000/files/avatars/8d583378-e315-4b9e-9569-40192e07c916.png\" -Method Head; \"Status: $\\($r.StatusCode\\), Content-Type: $\\($r.Headers['Content-Type']\\)\" } catch { \"Failed: $\\($_.Exception.Message\\)\" })",
+      "PowerShell(docker exec bookshelf-db *)",
+      "Bash(git rm *)",
+      "PowerShell(try { Invoke-RestMethod -UseBasicParsing -Uri \"http://localhost:3000/api/faculties\" | ConvertTo-Json -Depth 4 -Compress | Select-Object -First 1 } catch { \"ERR: $\\($_.Exception.Message\\)\" })",
+      "Bash(sed -n '/<template>/,/<\\\\/template>/p')",
+      "Bash(sed -n '/<template>/,/<\\\\/template>/p' frontend/src/pages/MainPage/components/ClubTab.vue)"
     ]
   }
 }

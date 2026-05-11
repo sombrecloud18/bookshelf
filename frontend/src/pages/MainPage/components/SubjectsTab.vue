@@ -333,7 +333,7 @@ async function submitAdd() {
     >
       По запросу «{{ props.query }}» подборок не найдено.
     </div>
-    <CollectionsTab v-else :collections="filteredSubjectCollections" :books="booksForCollections" />
+    <CollectionsTab v-else :collections="filteredSubjectCollections" :books="booksForCollections" type="SUBJECT_COLLECTION" />
   </div>
 
   <UModal v-model:open="addOpen" title="Добавить подборку" class="z-100">

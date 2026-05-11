@@ -34,7 +34,9 @@ public class SubjectController {
     @PostMapping
     @PreAuthorize("hasRole('MODERATOR')")
     public ResponseEntity<SubjectDTO> create(@Valid @RequestBody CreateSubjectDTO dto) {
-        log.info("Создание предмета: specialty='{}', name='{}'", dto.getSpecialty(), dto.getName());
+        log.info("Создание предмета: name='{}', common={}, specialties={}",
+                dto.getName(), dto.isCommon(),
+                dto.getSpecialtyIds() == null ? 0 : dto.getSpecialtyIds().size());
         return ResponseEntity.ok(subjectService.create(dto));
     }
 
