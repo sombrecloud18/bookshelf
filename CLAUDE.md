@@ -55,7 +55,7 @@ Standard layered Spring Boot architecture:
 
 **Key non-obvious detail**: The frontend refers to the admin role as `"admin"` in localStorage, but Spring Security uses `ROLE_MODERATOR`. Admin routes in the frontend check `role === 'admin'`, while backend `@PreAuthorize` uses `hasRole("MODERATOR")`.
 
-**Recommendation engine** (`RecommendationService`): Uses collaborative filtering via `UserActivityRepository`, falling back to random unread books. Personal recommendations return three lists: `personal`, `popular`, `newBooks`.
+**Recommendation engine** (`com.bookshelf.recommendation.*`): Hybrid CF + CB. Item-kNN cosine similarity stored in `book_similarity`, TF-IDF (Lucene `RussianAnalyzer`) stored in `book_tfidf`. Blended in `HybridRecommendationService` with adaptive λ. `RecommendationService` is the public orchestrator. Synthetic test data via `POST /api/admin/recommendation/seed` (MODERATOR). Offline metrics via `POST /api/admin/recommendation/evaluate`. See `docs/recommendation-system.md`.
 
 ### Frontend (`frontend/src/`)
 
@@ -72,10 +72,17 @@ Standard layered Spring Boot architecture:
 
 ### Database
 
-Three Flyway migrations:
-- `V1__Initial_schema.sql` — Full schema
-- `V2__Add_search_vector.sql` — Full-text search support
-- `V3__Seed_initial_data.sql` — Seed data
+Flyway migrations (latest first):
+- `V10__Catalog_expansion_for_personas.sql` — +25 books matching the 5 persona archetypes
+- `V9__Recommendation_engine_schema.sql` — `book_similarity`, `book_tfidf`, `recommendation_log`, `recommendation_evaluation`
+- `V8__Comments_likes_for_collections.sql`
+- `V7__Faculty_specialty_subject_system.sql`
+- `V6__Review_moderator_comment.sql`
+- `V5__Extended_seed_data.sql`
+- `V4__Add_likes_subjects_and_extend_entities.sql`
+- `V3__Seed_initial_data.sql`
+- `V2__Add_search_vector.sql`
+- `V1__Initial_schema.sql`
 
 `spring.jpa.hibernate.ddl-auto=validate` — schema is managed exclusively by Flyway in production.
 

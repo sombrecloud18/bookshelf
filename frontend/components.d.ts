@@ -12,6 +12,7 @@ export {}
 declare module 'vue' {
   export interface GlobalComponents {
     Card: typeof import('./src/components/Card.vue')['default']
+    ConfirmModal: typeof import('./src/components/ConfirmModal.vue')['default']
     FileUpload: typeof import('./src/components/FileUpload.vue')['default']
     LikeButton: typeof import('./src/components/LikeButton.vue')['default']
     RouterLink: typeof import('vue-router')['RouterLink']

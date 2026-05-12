@@ -16,7 +16,8 @@ public class RecommendationItemDTO {
     private String author;
     private String imageUrl;
     private String description;
-    private Double matchScore;
+    private Double matchScore;     // 0..1, where 1 = strongest recommendation
+    private String source;         // CF / CB / HYBRID / POPULAR / NEW / SIMILAR_CF / SIMILAR_GENRE
     private Long views;
     private String addedDate;
 }

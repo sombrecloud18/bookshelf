@@ -50,7 +50,9 @@
       "Bash(git rm *)",
       "PowerShell(try { Invoke-RestMethod -UseBasicParsing -Uri \"http://localhost:3000/api/faculties\" | ConvertTo-Json -Depth 4 -Compress | Select-Object -First 1 } catch { \"ERR: $\\($_.Exception.Message\\)\" })",
       "Bash(sed -n '/<template>/,/<\\\\/template>/p')",
-      "Bash(sed -n '/<template>/,/<\\\\/template>/p' frontend/src/pages/MainPage/components/ClubTab.vue)"
+      "Bash(sed -n '/<template>/,/<\\\\/template>/p' frontend/src/pages/MainPage/components/ClubTab.vue)",
+      "Bash(java -version)",
+      "Bash(where javac *)"
     ]
   }
 }

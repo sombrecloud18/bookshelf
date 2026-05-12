@@ -89,7 +89,10 @@ function isOrdered(bookId) {
         <div class="flex items-center justify-between mb-4">
           <div>
             <h2 class="text-2xl font-bold text-black">Рекомендации для вас</h2>
-            <p class="text-sm text-gray-600 mt-1">Подобрано на основе ваших предпочтений</p>
+            <p class="text-sm text-gray-600 mt-1">
+              Подобрано гибридным алгоритмом ИИ: коллаборативная и контентная фильтрация.
+              Процент показывает уровень совпадения с вашими предпочтениями.
+            </p>
           </div>
         </div>
 
@@ -102,6 +105,7 @@ function isOrdered(bookId) {
               :author="rec.author"
               :description="rec.description"
               :image-url="rec.imageUrl"
+              :match-score="rec.matchScore"
               :is-ordered="isOrdered(rec.bookId)"
               @toggle-order="toggleOrder(rec.bookId)"
             />
@@ -161,8 +165,11 @@ function isOrdered(bookId) {
         class="text-center py-12 bg-white rounded-3xl"
       >
         <h3 class="text-xl font-semibold text-gray-600 mb-2">Нет рекомендаций</h3>
-        <p class="text-gray-500">Оцените больше книг, чтобы получать персонализированные рекомендации</p>
-        <UButton to="/" color="primary" class="rounded-xl mt-4">Перейти в каталог</UButton>
+        <p class="text-gray-500">
+          Укажите ваши любимые жанры и авторов в профиле,
+          чтобы получать персонализированные рекомендации.
+        </p>
+        <UButton to="/account" color="primary" class="rounded-xl mt-4">Заполнить предпочтения</UButton>
       </div>
     </template>
   </div>

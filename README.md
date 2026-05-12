@@ -41,25 +41,27 @@ bookshelf/
 
 ```bash
 # Clone repository
-git clone <repository-url>
+git clone https://github.com/sombrecloud18/bookshelf.git
 cd bookshelf
 
 # Copy environment template
 cp .env.example .env
 
 # Build and start all services
-docker-compose up -d
+docker compose up -d --build
 
 # View logs
-docker-compose logs -f
+docker compose logs -f
 ```
 
 Services will be available at:
 - **Frontend**: http://localhost:3000
-- **Backend API**: http://localhost:8080/api
-- **Database**: localhost:5432
+- **Backend API**: http://localhost:8088/api
+- **Database**: localhost:5455
 
-See [DEPLOYMENT.md](./docs/DEPLOYMENT.md) for detailed Docker instructions.
+**📖 Полное руководство по развёртыванию с нуля на другой машине, включая инициализацию рекомендательной системы и генерацию тестовых данных — см. [docs/deployment-guide.md](./docs/deployment-guide.md)**.
+
+See also [DEPLOYMENT.md](./docs/DEPLOYMENT.md) for the older Docker reference.
 
 ### Local Development
 
@@ -80,6 +82,9 @@ mvn spring-boot:run
 
 ## 📚 Documentation
 
+- **[deployment-guide.md](./docs/deployment-guide.md)** — 🆕 Полное руководство по развёртыванию проекта с нуля на чистой машине (Docker, миграции, синтетика, рекомендации)
+- **[recommendation-system.md](./docs/recommendation-system.md)** — Техническое описание гибридной рекомендательной системы (CF + CB)
+- **[thesis-recommendation-chapter.md](./docs/thesis-recommendation-chapter.md)** — Готовая глава для пояснительной записки с формулами и методологией
 - **[DEVELOPMENT.md](./docs/DEVELOPMENT.md)** - Local development setup and workflow
 - **[DEPLOYMENT.md](./docs/DEPLOYMENT.md)** - Docker and production deployment
 - **[API.md](./docs/API.md)** - REST API documentation with examples

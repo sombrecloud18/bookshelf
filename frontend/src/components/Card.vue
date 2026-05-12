@@ -3,6 +3,16 @@
     variant="soft"
     class="hover:shadow-xl transition-all duration-300 rounded-2xl bg-white flex flex-col h-full relative"
   >
+    <!-- Бейдж с процентом совпадения рекомендации -->
+    <div
+      v-if="matchPercent !== null"
+      class="absolute top-3 left-3 px-2 py-1 rounded-md text-xs font-semibold shadow-md text-white"
+      :class="matchBadgeColor"
+      :title="`Совпадение по рекомендательному алгоритму: ${matchPercent}%`"
+    >
+      {{ matchPercent }}%
+    </div>
+
     <!-- Звёздочка «в избранное / заказы» -->
     <button
       class="absolute top-3 right-3 p-2 rounded-full bg-white/80 hover:bg-white transition-all duration-200 shadow-md"
@@ -55,6 +65,7 @@
 </template>
 
 <script setup>
+import { computed } from 'vue';
 import { useRouter } from 'vue-router';
 import { getGenreColor } from '../constants/genreColors';
 
@@ -67,10 +78,27 @@ const props = defineProps({
   description: { type: String, default: '' },
   year: { type: [String, Number], default: '' },
   isOrdered: { type: Boolean, default: false },
+  matchScore: { type: Number, default: null },
 });
 
 defineEmits(['toggle-order']);
 const router = useRouter();
+
+const matchPercent = computed(() => {
+  if (props.matchScore === null || props.matchScore === undefined) return null;
+  const v = Number(props.matchScore);
+  if (Number.isNaN(v) || v <= 0.3) return null;
+  return Math.round(Math.min(1, v) * 100);
+});
+
+const matchBadgeColor = computed(() => {
+  const v = matchPercent.value;
+  if (v === null) return '';
+  if (v >= 80) return 'bg-emerald-500';
+  if (v >= 60) return 'bg-blue-500';
+  if (v >= 40) return 'bg-amber-500';
+  return 'bg-gray-400';
+});
 
 function reserve() {
   window.open('https://library.bsuir.by/', '_blank', 'noopener,noreferrer');
