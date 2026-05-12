@@ -160,7 +160,7 @@ async function cancelGoing() {
       </div>
       <div v-if="i.date" class="mt-1 text-xs text-gray-500">📅 {{ i.date }}<span v-if="i.time"> • ⏰ {{ i.time }}</span></div>
       <div class="mt-4 flex justify-end">
-        <UButton variant="outline" class="rounded-xl" @click="openDetails(i.id)">Подробнее</UButton>
+        <UButton variant="outline" class="rounded-xl bg-white hover:!text-white" @click="openDetails(i.id)">Подробнее</UButton>
       </div>
     </UCard>
   </div>

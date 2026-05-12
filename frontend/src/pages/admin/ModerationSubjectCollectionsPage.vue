@@ -1,6 +1,9 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue';
 import { api } from '../../api.js';
+import { useConfirm } from '../../composables/useConfirm.js';
+
+const askConfirm = useConfirm();
 
 const pendingCollections = ref([]);
 const booksCache = ref({});
@@ -51,7 +54,12 @@ function viewDetails(collection) {
 }
 
 async function approve(collection) {
-  if (!confirm(`Одобрить подборку "${collection.title}"?`)) return;
+  const ok = await askConfirm(`Одобрить подборку «${collection.title}»?`, {
+    title: 'Одобрение подборки',
+    confirmLabel: 'Одобрить',
+    variant: 'primary',
+  });
+  if (!ok) return;
   try {
     await api.post(`/subject-collections/${collection.id}/approve`);
     pendingCollections.value = pendingCollections.value.filter(c => c.id !== collection.id);
@@ -64,6 +72,8 @@ async function approve(collection) {
 function openRejectModal(collection) {
   selectedCollection.value = collection;
   rejectReason.value = '';
+  // Скрываем «Подробнее», чтобы пользователь не видел сразу два диалога.
+  showDetailsModal.value = false;
   showRejectModal.value = true;
 }
 
@@ -94,7 +104,7 @@ async function confirmReject() {
           <h1 class="text-4xl font-bold text-black">Модерация подборок по предметам</h1>
           <p class="text-gray-700 mt-2">На проверке: {{ pendingCollections.length }} подборок</p>
         </div>
-        <UButton to="/admin" variant="ghost" class="rounded-xl">← Назад</UButton>
+        <UButton to="/admin" variant="ghost" class="rounded-xl bg-white hover:!bg-black hover:!text-white">← Назад</UButton>
       </div>
 
       <div v-if="loading" class="flex justify-center py-12">
@@ -103,7 +113,7 @@ async function confirmReject() {
 
       <UCard v-else variant="soft" class="bg-white rounded-2xl p-5">
         <div v-if="pendingCollections.length === 0" class="text-center py-12 text-gray-500">
-          <svg class="w-16 h-16 mx-auto mb-4 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg class="w-16 h-16 mx-auto mb-4 text-black" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path
               stroke-linecap="round"
               stroke-linejoin="round"
@@ -151,8 +161,8 @@ async function confirmReject() {
                 <UButton size="sm" color="primary" variant="soft" class="rounded-xl" @click="viewDetails(collection)">
                   Подробнее
                 </UButton>
-                <UButton size="sm" color="green" class="rounded-xl" @click="approve(collection)"> Одобрить </UButton>
-                <UButton size="sm" color="red" variant="soft" class="rounded-xl" @click="openRejectModal(collection)">
+                <UButton size="sm" color="success" variant="soft" class="rounded-xl" @click="approve(collection)"> Одобрить </UButton>
+                <UButton size="sm" color="error" variant="soft" class="rounded-xl" @click="openRejectModal(collection)">
                   Отклонить
                 </UButton>
               </div>
@@ -204,7 +214,7 @@ async function confirmReject() {
         </template>
         <template #footer>
           <div class="flex justify-end gap-3 w-full">
-            <UButton variant="outline" @click="showDetailsModal = false">Закрыть</UButton>
+            <UButton variant="outline" class="bg-white hover:!text-white" @click="showDetailsModal = false">Закрыть</UButton>
           </div>
         </template>
       </UModal>
@@ -225,8 +235,8 @@ async function confirmReject() {
         </template>
         <template #footer>
           <div class="flex justify-end gap-3 w-full">
-            <UButton variant="outline" @click="showRejectModal = false">Отмена</UButton>
-            <UButton color="red" @click="confirmReject">Отклонить</UButton>
+            <UButton variant="outline" class="bg-white hover:!text-white" @click="showRejectModal = false">Отмена</UButton>
+            <UButton color="error" variant="soft" @click="confirmReject">Отклонить</UButton>
           </div>
         </template>
       </UModal>

@@ -80,7 +80,7 @@ onMounted(async () => {
             <h2 class="text-lg font-semibold text-black">Мероприятия</h2>
             <p class="text-sm text-gray-500 mt-1">Управление мероприятиями</p>
             <div class="mt-4">
-              <UButton to="/admin/events" class="rounded-xl w-full" variant="outline"> Управление мероприятиями </UButton>
+              <UButton to="/admin/events" class="rounded-xl w-full bg-white hover:!text-white" variant="outline"> Управление мероприятиями </UButton>
             </div>
           </UCard>
         </div>

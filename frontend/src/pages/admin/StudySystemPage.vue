@@ -2,6 +2,9 @@
 import { computed, onMounted, reactive, ref } from 'vue';
 import { api } from '../../api.js';
 import { useFaculties } from '../../composables/useFaculties.js';
+import { useConfirm } from '../../composables/useConfirm.js';
+
+const askConfirm = useConfirm();
 
 // ── Faculties + specialties (loaded via shared composable) ──────────────────
 const { faculties, allSpecialties, refresh: refreshFaculties } = useFaculties();
@@ -70,7 +73,11 @@ async function saveFaculty() {
 }
 
 async function deleteFaculty(f) {
-  if (!confirm(`Удалить факультет «${f.name}»? Все его специальности тоже будут удалены.`)) return;
+  const ok = await askConfirm(`Удалить факультет «${f.name}»? Все его специальности тоже будут удалены.`, {
+    title: 'Удаление факультета',
+    confirmLabel: 'Удалить',
+  });
+  if (!ok) return;
   try {
     await api.delete(`/admin/faculties/${f.id}`);
     await refreshFaculties();
@@ -130,7 +137,11 @@ async function saveSpecialty() {
 }
 
 async function deleteSpecialty(spec) {
-  if (!confirm(`Удалить специальность «${spec.name}»? Подборки/связи с предметами для неё также пропадут.`)) return;
+  const ok = await askConfirm(`Удалить специальность «${spec.name}»? Подборки/связи с предметами для неё также пропадут.`, {
+    title: 'Удаление специальности',
+    confirmLabel: 'Удалить',
+  });
+  if (!ok) return;
   try {
     await api.delete(`/admin/specialties/${spec.id}`);
     await refreshFaculties();
@@ -229,7 +240,11 @@ async function saveSubject() {
 }
 
 async function deleteSubject(s) {
-  if (!confirm(`Удалить предмет «${s.name}»? Связанные учебные подборки потеряют ссылку на предмет.`)) return;
+  const ok = await askConfirm(`Удалить предмет «${s.name}»? Связанные учебные подборки потеряют ссылку на предмет.`, {
+    title: 'Удаление предмета',
+    confirmLabel: 'Удалить',
+  });
+  if (!ok) return;
   try {
     await api.delete(`/subjects/${s.id}`);
     await loadSubjects();
@@ -247,7 +262,7 @@ async function deleteSubject(s) {
           <h1 class="text-4xl font-bold text-black">Учебная система</h1>
           <p class="text-gray-700 mt-2">Факультеты, специальности и предметы</p>
         </div>
-        <UButton to="/admin" variant="ghost" class="rounded-xl">← Назад</UButton>
+        <UButton to="/admin" variant="ghost" class="rounded-xl bg-white hover:!bg-black hover:!text-white">← Назад</UButton>
       </div>
 
       <!-- Faculties / Specialties -->
@@ -258,7 +273,7 @@ async function deleteSubject(s) {
             <UButton size="sm" color="primary" class="rounded-xl" @click="openFacultyCreate">
               + Факультет
             </UButton>
-            <UButton size="sm" variant="outline" class="rounded-xl" @click="() => openSpecialtyCreate()">
+            <UButton size="sm" variant="outline" class="rounded-xl bg-white hover:!text-white" @click="() => openSpecialtyCreate()">
               + Специальность
             </UButton>
           </div>
@@ -280,7 +295,7 @@ async function deleteSubject(s) {
                 <UButton size="xs" color="primary" variant="soft" @click="openFacultyEdit(f)">
                   Изменить
                 </UButton>
-                <UButton size="xs" color="red" variant="soft" @click="deleteFaculty(f)">
+                <UButton size="xs" color="error" variant="soft" @click="deleteFaculty(f)">
                   Удалить
                 </UButton>
               </div>
@@ -291,12 +306,12 @@ async function deleteSubject(s) {
                 :key="s.id"
                 class="flex items-center justify-between p-2 rounded-xl bg-white border border-gray-200 text-sm"
               >
-                <span class="font-medium">{{ s.name }}</span>
+                <span class="font-medium text-black">{{ s.name }}</span>
                 <div class="flex gap-1">
-                  <UButton size="xs" color="primary" variant="ghost" @click="openSpecialtyEdit(f, s)">
+                  <UButton size="xs" color="primary" variant="ghost" class="bg-white hover:!bg-black hover:!text-white" @click="openSpecialtyEdit(f, s)">
                     Изменить
                   </UButton>
-                  <UButton size="xs" color="red" variant="ghost" @click="deleteSpecialty(s)">
+                  <UButton size="xs" color="error" variant="ghost" class="bg-white" @click="deleteSpecialty(s)">
                     Удалить
                   </UButton>
                 </div>
@@ -304,7 +319,7 @@ async function deleteSubject(s) {
               <div v-if="(f.specialties || []).length === 0" class="text-xs text-gray-500 italic">
                 Нет специальностей
               </div>
-              <UButton size="xs" variant="outline" class="w-full mt-2" @click="openSpecialtyCreate(f)">
+              <UButton size="xs" variant="outline" class="w-full mt-2 bg-white hover:!text-white" @click="openSpecialtyCreate(f)">
                 + Добавить специальность
               </UButton>
             </div>
@@ -340,7 +355,7 @@ async function deleteSubject(s) {
                 <span class="font-semibold text-black">{{ s.name }}</span>
                 <span
                   v-if="s.common"
-                  class="text-xs px-2 py-0.5 rounded-full bg-green-100 text-green-700"
+                  class="text-xs px-2 py-0.5 rounded-full bg-green-100 text-green-800"
                 >
                   Общий для всех
                 </span>
@@ -356,7 +371,7 @@ async function deleteSubject(s) {
             </div>
             <div class="flex gap-1 flex-none">
               <UButton size="xs" color="primary" variant="soft" @click="openSubjectEdit(s)">Изменить</UButton>
-              <UButton size="xs" color="red" variant="soft" @click="deleteSubject(s)">Удалить</UButton>
+              <UButton size="xs" color="error" variant="soft" @click="deleteSubject(s)">Удалить</UButton>
             </div>
           </div>
         </div>
@@ -378,7 +393,7 @@ async function deleteSubject(s) {
       </template>
       <template #footer>
         <div class="flex justify-end gap-3 w-full">
-          <UButton variant="outline" @click="facultyOpen = false">Отмена</UButton>
+          <UButton variant="outline" class="bg-white hover:!text-white" @click="facultyOpen = false">Отмена</UButton>
           <UButton :loading="facultySaving" color="primary" @click="saveFaculty">Сохранить</UButton>
         </div>
       </template>
@@ -394,7 +409,7 @@ async function deleteSubject(s) {
           <UFormField label="Факультет">
             <select
               v-model="specialtyForm.facultyId"
-              class="w-full px-3 py-2 rounded-xl border border-gray-300 bg-white"
+              class="w-full px-3 py-2 rounded-xl border border-gray-200 bg-white"
             >
               <option value="" disabled>Выберите факультет</option>
               <option v-for="f in faculties" :key="f.id" :value="f.id">{{ f.name }}</option>
@@ -408,7 +423,7 @@ async function deleteSubject(s) {
       </template>
       <template #footer>
         <div class="flex justify-end gap-3 w-full">
-          <UButton variant="outline" @click="specialtyOpen = false">Отмена</UButton>
+          <UButton variant="outline" class="bg-white hover:!text-white" @click="specialtyOpen = false">Отмена</UButton>
           <UButton :loading="specialtySaving" color="primary" @click="saveSpecialty">Сохранить</UButton>
         </div>
       </template>
@@ -478,14 +493,14 @@ async function deleteSubject(s) {
 
           <UAlert v-if="subjectError" color="error" variant="soft" :description="subjectError" />
 
-          <div class="text-xs text-gray-600 bg-yellow-50 border border-yellow-200 rounded-lg p-3">
+          <div class="text-xs text-gray-600 bg-yellow-100 border border-gray-200 rounded-lg p-3">
             Подсказка: если несколько специальностей (даже на разных факультетах) разделяют один и тот же предмет, подборки книг для них будут общими.
           </div>
         </div>
       </template>
       <template #footer>
         <div class="flex justify-end gap-3 w-full">
-          <UButton variant="outline" @click="subjectOpen = false">Отмена</UButton>
+          <UButton variant="outline" class="bg-white hover:!text-white" @click="subjectOpen = false">Отмена</UButton>
           <UButton :loading="subjectSaving" color="primary" @click="saveSubject">Сохранить</UButton>
         </div>
       </template>

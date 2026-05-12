@@ -49,6 +49,8 @@ function openRejectModal(review) {
   rejectingReview.value = review;
   rejectReason.value = '';
   rejectError.value = null;
+  // Прячем модалку «Подробнее», чтобы поверх остался только диалог отклонения.
+  showDetailsModal.value = false;
   showRejectModal.value = true;
 }
 
@@ -79,7 +81,7 @@ async function confirmReject() {
           <h1 class="text-4xl font-bold text-black">Модерация рецензий</h1>
           <p class="text-gray-700 mt-2">На проверке: {{ reviewsQueue.length }} рецензий</p>
         </div>
-        <UButton to="/admin" variant="ghost" class="rounded-xl">← Назад</UButton>
+        <UButton to="/admin" variant="ghost" class="rounded-xl bg-white hover:!bg-black hover:!text-white">← Назад</UButton>
       </div>
 
       <div v-if="loading" class="flex justify-center py-12">
@@ -88,7 +90,7 @@ async function confirmReject() {
 
       <UCard v-else variant="soft" class="bg-white rounded-2xl p-5">
         <div v-if="reviewsQueue.length === 0" class="text-center py-12 text-gray-500">
-          <svg class="w-16 h-16 mx-auto mb-4 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg class="w-16 h-16 mx-auto mb-4 text-black" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path
               stroke-linecap="round"
               stroke-linejoin="round"
@@ -151,10 +153,10 @@ async function confirmReject() {
                     <UButton size="sm" color="primary" variant="soft" class="rounded-xl" @click="viewDetails(review)">
                       Подробнее
                     </UButton>
-                    <UButton size="sm" color="green" class="rounded-xl" @click="approveReview(review.id)">
+                    <UButton size="sm" color="success" variant="soft" class="rounded-xl" @click="approveReview(review.id)">
                       Одобрить
                     </UButton>
-                    <UButton size="sm" color="red" variant="soft" class="rounded-xl" @click="openRejectModal(review)">
+                    <UButton size="sm" color="error" variant="soft" class="rounded-xl" @click="openRejectModal(review)">
                       Отклонить
                     </UButton>
                   </div>
@@ -218,10 +220,10 @@ async function confirmReject() {
         <template #footer>
           <div class="flex justify-between gap-3 w-full">
             <div class="flex gap-2">
-              <UButton color="green" class="rounded-xl" @click="approveReview(selectedReview?.id)">Одобрить</UButton>
-              <UButton color="red" variant="soft" class="rounded-xl" @click="openRejectModal(selectedReview)">Отклонить</UButton>
+              <UButton color="success" variant="soft" class="rounded-xl" @click="approveReview(selectedReview?.id)">Одобрить</UButton>
+              <UButton color="error" variant="soft" class="rounded-xl" @click="openRejectModal(selectedReview)">Отклонить</UButton>
             </div>
-            <UButton variant="outline" @click="showDetailsModal = false">Закрыть</UButton>
+            <UButton variant="outline" class="bg-white hover:!text-white" @click="showDetailsModal = false">Закрыть</UButton>
           </div>
         </template>
       </UModal>
@@ -245,8 +247,8 @@ async function confirmReject() {
         </template>
         <template #footer>
           <div class="flex justify-end gap-3 w-full">
-            <UButton variant="outline" @click="showRejectModal = false">Отмена</UButton>
-            <UButton color="red" @click="confirmReject">Отклонить</UButton>
+            <UButton variant="outline" class="bg-white hover:!text-white" @click="showRejectModal = false">Отмена</UButton>
+            <UButton color="error" variant="soft" @click="confirmReject">Отклонить</UButton>
           </div>
         </template>
       </UModal>

@@ -1,2 +1,120 @@
 @import 'tailwindcss';
 @import '@nuxt/ui';
+
+/* ─────────────────────────────────────────────────────────────────────────
+   Все кнопки получают курсор-указатель (за исключением задизейбленных). */
+button:not(:disabled),
+[role='button']:not([aria-disabled='true']),
+a[role='button'] {
+  cursor: pointer;
+}
+button:disabled,
+[role='button'][aria-disabled='true'] {
+  cursor: not-allowed;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   Кнопка с белым фоном (обычно outline-вариант @nuxt/ui с тёмной/чёрной
+   обводкой) должна всегда иметь чёрный текст — иначе на белом фоне с
+   неярким бордером плохо читается синий/серый текст по умолчанию.
+   UButton рендерится как button или a с data-slot="base".
+   Hover/active не трогаем — там кнопка может явно требовать белый текст. */
+[data-slot='base'].bg-white:not(:hover):not(:active),
+[data-slot='base'].bg-white:not(:hover):not(:active) [data-slot='label'],
+button.bg-white:not(:hover):not(:active),
+button.bg-white:not(:hover):not(:active) [data-slot='label'] {
+  color: #000 !important;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   Поля ввода: белый фон, чёрный текст, тёмно-серый плейсхолдер. */
+input[type='text'],
+input[type='email'],
+input[type='password'],
+input[type='search'],
+input[type='number'],
+input[type='tel'],
+input[type='url'],
+input[type='date'],
+input[type='time'],
+input:not([type]),
+textarea,
+select {
+  background-color: #ffffff !important;
+  color: #000000 !important;
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: #4b5563 !important; /* gray-600 */
+  opacity: 1;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   USelect: триггер-кнопка и popover-список всегда на белом фоне с чёрным текстом. */
+button[role='combobox'],
+button[aria-haspopup='listbox'] {
+  background-color: #ffffff !important;
+  color: #000000 !important;
+}
+
+[role='listbox'] {
+  background-color: #ffffff !important;
+  color: #000000 !important;
+}
+
+[role='listbox'] [role='option'] {
+  color: #000000 !important;
+}
+
+[role='listbox'] [role='option'][data-highlighted],
+[role='listbox'] [role='option']:hover {
+  background-color: #f3f4f6 !important; /* gray-100 hover */
+  color: #000000 !important;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   Оверлей модалок должен лежать поверх фиксированного хедера (z-50), чтобы
+   и шапка тоже затемнялась. Контент модалки уже выше (class="z-100"). */
+[data-slot='overlay'] {
+  z-index: 60;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   Контраст внутри модалок. Тело модалки рендерится тёмным (Nuxt UI v4
+   `bg-default`), поэтому весь основной текст делаем белым. Внутренние
+   карточки с `bg-white` остаются с чёрным текстом и серым плейсхолдером. */
+[role='dialog'][data-slot='content'] .text-gray-500,
+[role='dialog'][data-slot='content'] .text-gray-600,
+[role='dialog'][data-slot='content'] .text-gray-700,
+[role='dialog'][data-slot='content'] .text-gray-800,
+[role='dialog'][data-slot='content'] .text-black {
+  color: #ffffff;
+}
+
+[role='dialog'][data-slot='content'] :is(.bg-white, .bg-gray-50, .bg-gray-100) {
+  color: #000000;
+}
+[role='dialog'][data-slot='content'] :is(.bg-white, .bg-gray-50, .bg-gray-100) :is(.text-gray-500, .text-gray-600, .text-gray-700, .text-gray-800, .text-black) {
+  color: #000000;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   Лейблы UFormField на страницах «Мой аккаунт», «Регистрация», «Вход».
+   Делаем все серые подписи и подсказки чёрными. */
+.account-page,
+.auth-page {
+  color: #000000;
+}
+.account-page [data-slot='label'],
+.auth-page [data-slot='label'],
+.account-page label,
+.auth-page label {
+  color: #000000 !important;
+}
+.account-page [data-slot='description'],
+.auth-page [data-slot='description'],
+.account-page [data-slot='hint'],
+.auth-page [data-slot='hint'] {
+  color: #000000 !important;
+}

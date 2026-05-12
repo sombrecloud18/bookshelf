@@ -3,6 +3,9 @@ import { computed, reactive, ref, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 import { getGenreColor } from '../../constants/genreColors';
 import { api } from '../../api.js';
+import { useConfirm } from '../../composables/useConfirm.js';
+
+const askConfirm = useConfirm();
 
 const router = useRouter();
 
@@ -35,9 +38,14 @@ onMounted(async () => {
   }
 });
 
-function startEdit(reviewId) {
+async function startEdit(reviewId) {
   if (isEditing.value && editingId.value !== reviewId) {
-    if (!confirm('Есть несохранённые изменения. Продолжить без сохранения?')) return;
+    const ok = await askConfirm('Есть несохранённые изменения. Продолжить без сохранения?', {
+      title: 'Несохранённые изменения',
+      confirmLabel: 'Продолжить',
+      variant: 'primary',
+    });
+    if (!ok) return;
   }
   const review = reviews.value.find(r => r.id === reviewId);
   if (!review) return;
@@ -80,7 +88,11 @@ async function save() {
 }
 
 async function deleteReview(id) {
-  if (!confirm('Удалить эту рецензию?')) return;
+  const ok = await askConfirm('Удалить эту рецензию?', {
+    title: 'Удаление рецензии',
+    confirmLabel: 'Удалить',
+  });
+  if (!ok) return;
   try {
     await api.delete(`/reviews/${id}`);
     reviews.value = reviews.value.filter(r => r.id !== id);
@@ -232,7 +244,7 @@ function goToBook(bookId) {
                     <span
                       v-if="review.status && review.status !== 'APPROVED'"
                       class="inline-flex px-3 py-0.5 text-xs font-medium rounded-full"
-                      :class="review.status === 'PENDING' ? 'bg-yellow-100 text-yellow-700' : 'bg-red-100 text-red-700'"
+                      :class="review.status === 'PENDING' ? 'bg-yellow-100 text-yellow-800' : 'bg-red-100 text-red-800'"
                     >
                       {{ review.status === 'PENDING' ? 'На модерации' : 'Отклонено' }}
                     </span>
@@ -242,11 +254,9 @@ function goToBook(bookId) {
                 </div>
 
                 <div class="flex gap-2">
-                  <UButton
-                    size="sm"
-                    variant="ghost"
-                    color="primary"
-                    class="rounded-xl"
+                  <button
+                    type="button"
+                    class="w-9 h-9 inline-flex items-center justify-center rounded-xl text-black hover:bg-black hover:text-white transition-colors"
                     aria-label="Подробнее о книге"
                     @click="goToBook(review.bookId)"
                   >
@@ -255,12 +265,10 @@ function goToBook(bookId) {
                         d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"
                       />
                     </svg>
-                  </UButton>
-                  <UButton
-                    size="sm"
-                    variant="ghost"
-                    color="neutral"
-                    class="rounded-xl"
+                  </button>
+                  <button
+                    type="button"
+                    class="w-9 h-9 inline-flex items-center justify-center rounded-xl text-black hover:bg-black hover:text-white transition-colors"
                     aria-label="Редактировать"
                     @click="startEdit(review.id)"
                   >
@@ -268,12 +276,10 @@ function goToBook(bookId) {
                       <path d="M12 20h9" />
                       <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5Z" />
                     </svg>
-                  </UButton>
-                  <UButton
-                    size="sm"
-                    variant="ghost"
-                    color="red"
-                    class="rounded-xl"
+                  </button>
+                  <button
+                    type="button"
+                    class="w-9 h-9 inline-flex items-center justify-center rounded-xl text-black hover:bg-black hover:text-white transition-colors"
                     aria-label="Удалить"
                     @click="deleteReview(review.id)"
                   >
@@ -282,7 +288,7 @@ function goToBook(bookId) {
                       <path d="M8 6V4h8v2" />
                       <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6" />
                     </svg>
-                  </UButton>
+                  </button>
                 </div>
               </div>
 
@@ -343,17 +349,17 @@ function goToBook(bookId) {
                   </p>
                   <div
                     v-if="review.status === 'REJECTED' && review.moderatorComment"
-                    class="mt-3 p-3 rounded-lg bg-red-50 border border-red-200 text-sm text-red-800"
+                    class="mt-3 p-3 rounded-lg bg-red-100 border border-red-500 text-sm text-red-800"
                   >
                     <p class="font-semibold mb-1">Причина отклонения:</p>
                     <p class="whitespace-pre-wrap break-words" style="overflow-wrap: anywhere">{{ review.moderatorComment }}</p>
-                    <p class="mt-2 text-xs text-red-700">Внесите изменения и сохраните — рецензия снова уйдёт на модерацию.</p>
+                    <p class="mt-2 text-xs text-red-800">Внесите изменения и сохраните — рецензия снова уйдёт на модерацию.</p>
                   </div>
                 </div>
               </div>
 
               <div class="mt-4 pt-2 flex justify-end">
-                <UButton size="sm" variant="outline" class="rounded-xl" @click="goToBook(review.bookId)">
+                <UButton size="sm" variant="outline" class="rounded-xl bg-white hover:!text-white" @click="goToBook(review.bookId)">
                   Подробнее о книге →
                 </UButton>
               </div>
@@ -468,7 +474,7 @@ function goToBook(bookId) {
 
     <template #footer>
       <div class="flex justify-end gap-3 w-full">
-        <UButton variant="outline" @click="addOpen = false">Отмена</UButton>
+        <UButton variant="outline" class="bg-white hover:!text-white" @click="addOpen = false">Отмена</UButton>
         <UButton :loading="addSubmitting" class="bg-green-300 text-black rounded-xl" @click="addReview"> Добавить </UButton>
       </div>
     </template>

@@ -125,7 +125,7 @@ function reserve() {
     <div class="max-w-7xl mx-auto">
       <!-- Кнопка назад -->
       <button
-        class="mb-6 flex items-center gap-2 text-gray-700 hover:text-black transition-colors"
+        class="mb-6 flex items-center gap-2 text-black hover:text-black transition-colors"
         @click="router.back()"
       >
         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -162,9 +162,9 @@ function reserve() {
               <div class="flex items-center gap-1">
                 <span class="text-yellow-500 text-2xl">★</span>
                 <span v-if="reviews.length == 0 && !book.averageRating">Нет оценок</span>
-                <div v-else>
-                  <span class="text-2xl font-bold">{{ averageRating }}</span>
-                  <span class="text-gray-500">/5</span>
+                <div v-else class="text-gray-700">
+                  <span class="text-2xl font-bold text-gray-700">{{ averageRating }}</span>
+                  <span class="text-gray-700">/5</span>
                 </div>
               </div>
               <span class="text-gray-500">•</span>
@@ -180,20 +180,20 @@ function reserve() {
 
             <div class="grid grid-cols-2 md:grid-cols-4 gap-4 pt-4 border-t border-gray-200">
               <div>
-                <p class="text-xs text-gray-500">Издательство</p>
-                <p class="text-sm font-medium">{{ book.publisher || 'Не указано' }}</p>
+                <p class="text-xs text-gray-700">Издательство</p>
+                <p class="text-sm font-medium text-gray-700">{{ book.publisher || 'Не указано' }}</p>
               </div>
               <div>
-                <p class="text-xs text-gray-500">Год издания</p>
-                <p class="text-sm font-medium">{{ book.publishYear || book.year }}</p>
+                <p class="text-xs text-gray-700">Год издания</p>
+                <p class="text-sm font-medium text-gray-700">{{ book.publishYear || book.year }}</p>
               </div>
               <div>
-                <p class="text-xs text-gray-500">Страниц</p>
-                <p class="text-sm font-medium">{{ book.pages || 'Не указано' }}</p>
+                <p class="text-xs text-gray-700">Страниц</p>
+                <p class="text-sm font-medium text-gray-700">{{ book.pages || 'Не указано' }}</p>
               </div>
               <div>
-                <p class="text-xs text-gray-500">ISBN</p>
-                <p class="text-sm font-medium">{{ book.isbn || 'Не указан' }}</p>
+                <p class="text-xs text-gray-700">ISBN</p>
+                <p class="text-sm font-medium text-gray-700">{{ book.isbn || 'Не указан' }}</p>
               </div>
             </div>
 
@@ -254,7 +254,7 @@ function reserve() {
             <div class="mb-4">
               <label class="block text-sm font-medium text-gray-700 mb-2">
                 Текст рецензии
-                <span class="text-gray-400 font-normal">(минимум 200 символов)</span>
+                <span class="text-gray-400">(минимум 200 символов)</span>
               </label>
               <UTextarea
                 v-model="newReview.text"
@@ -268,7 +268,7 @@ function reserve() {
             <UAlert v-if="reviewError" color="error" variant="soft" :description="reviewError" class="mb-4" />
 
             <div class="flex justify-end">
-              <UButton color="green" class="rounded-xl" @click="submitReview"> Опубликовать рецензию </UButton>
+              <UButton color="success" variant="soft" class="rounded-xl" @click="submitReview"> Опубликовать рецензию </UButton>
             </div>
           </div>
 
@@ -306,7 +306,7 @@ function reserve() {
                 />
 
                 <button
-                  class="flex items-center gap-1 text-sm text-gray-500 hover:text-blue-500 transition-colors"
+                  class="flex items-center gap-1 text-sm text-black hover:text-blue-500 transition-colors"
                   @click="showCommentForm(review.id)"
                 >
                   <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -334,7 +334,7 @@ function reserve() {
                   </div>
                 </div>
                 <div class="flex justify-end gap-2 mt-2">
-                  <UButton size="sm" variant="outline" class="rounded-xl" @click="hideCommentForm"> Отмена </UButton>
+                  <UButton size="sm" variant="outline" class="rounded-xl bg-white hover:!text-white" @click="hideCommentForm"> Отмена </UButton>
                   <UButton size="sm" color="primary" class="rounded-xl" @click="submitComment(review.id)">
                     Отправить
                   </UButton>

@@ -273,7 +273,7 @@ async function submitAdd() {
             v-for="s in col.specialties"
             :key="`${col.faculty}-${s.value}`"
             type="button"
-            class="w-full text-left rounded-xl border border-gray-200 hover:bg-gray-50 hover:border-blue-300 transition-colors px-3 py-2"
+            class="w-full text-left rounded-xl border border-black hover:bg-gray-50 transition-colors px-3 py-2"
             @click="selectedSpecialty = s.value"
           >
             <div class="font-semibold text-black text-sm">{{ s.label }}</div>
@@ -370,7 +370,7 @@ async function submitAdd() {
               v-for="b in selectedAddBooks"
               :key="b.id"
               type="button"
-              class="px-2 py-1 rounded-full bg-blue-100 text-blue-700 text-xs hover:bg-blue-200"
+              class="px-2 py-1 rounded-full bg-blue-100 text-blue-800 text-xs hover:bg-blue-100"
               @click="addSelectedIds = addSelectedIds.filter(id => id !== b.id)"
             >
               {{ b.title }} ✕
@@ -405,8 +405,8 @@ async function submitAdd() {
 
     <template #footer>
       <div class="flex justify-end gap-3 w-full">
-        <UButton variant="outline" @click="addOpen = false">Отмена</UButton>
-        <UButton :loading="addSubmitting" class="bg-green-300 text-black rounded-xl" @click="submitAdd">
+        <UButton variant="outline" class="bg-white hover:!text-white" @click="addOpen = false">Отмена</UButton>
+        <UButton :loading="addSubmitting" color="success" variant="soft" @click="submitAdd">
           Отправить на модерацию
         </UButton>
       </div>

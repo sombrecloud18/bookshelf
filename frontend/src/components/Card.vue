@@ -6,7 +6,7 @@
     <!-- Звёздочка «в избранное / заказы» -->
     <button
       class="absolute top-3 right-3 p-2 rounded-full bg-white/80 hover:bg-white transition-all duration-200 shadow-md"
-      :class="isOrdered ? 'text-yellow-400' : 'text-gray-400'"
+      :class="isOrdered ? 'text-yellow-500' : 'text-gray-400'"
       :aria-label="isOrdered ? 'Убрать из заказов' : 'Добавить в заказы'"
       :title="isOrdered ? 'В заказах' : 'Добавить в заказы'"
       @click.stop="$emit('toggle-order')"
@@ -33,7 +33,7 @@
         </span>
       </div>
       <div class="flex min-h-16 items-center justify-center">
-        <h2 class="text-2xl font-bold text-center line-clamp-2">{{ title }}</h2>
+        <h2 class="text-2xl font-bold text-center text-black line-clamp-2">{{ title }}</h2>
       </div>
     </div>
 
@@ -49,7 +49,7 @@
 
     <div class="flex gap-2 justify-center mt-4 pt-2">
       <UButton size="md" color="primary" class="flex-1 justify-center" @click="reserve"> Забронировать </UButton>
-      <UButton size="md" variant="outline" class="flex-1 justify-center" @click="goToBookPage"> Подробнее </UButton>
+      <UButton size="md" variant="outline" class="flex-1 justify-center bg-white hover:!text-white" @click="goToBookPage"> Подробнее </UButton>
     </div>
   </UCard>
 </template>

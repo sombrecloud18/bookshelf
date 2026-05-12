@@ -2,6 +2,9 @@
 import { ref, reactive, onMounted, computed } from 'vue';
 import { api } from '../../api.js';
 import FileUpload from '../../components/FileUpload.vue';
+import { useConfirm } from '../../composables/useConfirm.js';
+
+const askConfirm = useConfirm();
 
 const books = ref([]);
 const loading = ref(true);
@@ -130,7 +133,12 @@ async function save() {
 }
 
 async function archive(book) {
-  if (!confirm(`Архивировать «${book.title}»? Книга перестанет быть видна пользователям.`)) return;
+  const ok = await askConfirm(`Архивировать «${book.title}»? Книга перестанет быть видна пользователям.`, {
+    title: 'Архивация книги',
+    confirmLabel: 'Архивировать',
+    variant: 'primary',
+  });
+  if (!ok) return;
   try {
     const updated = await api.post(`/books/${book.id}/archive`);
     books.value = books.value.map(b => b.id === updated.id ? updated : b);
@@ -149,7 +157,11 @@ async function restore(book) {
 }
 
 async function deleteBook(book) {
-  if (!confirm(`Удалить книгу «${book.title}»? Каскадно удалятся все рецензии, заказы и упоминания в подборках. Действие необратимо.`)) return;
+  const ok = await askConfirm(`Удалить книгу «${book.title}»? Каскадно удалятся все рецензии, заказы и упоминания в подборках. Действие необратимо.`, {
+    title: 'Удаление книги',
+    confirmLabel: 'Удалить',
+  });
+  if (!ok) return;
   try {
     await api.delete(`/books/${book.id}`);
     books.value = books.value.filter(b => b.id !== book.id);
@@ -169,14 +181,14 @@ async function deleteBook(book) {
         </div>
         <div class="flex items-center gap-3">
           <UButton color="primary" class="rounded-xl" @click="openCreate">+ Добавить книгу</UButton>
-          <UButton to="/admin" variant="ghost" class="rounded-xl">← Назад</UButton>
+          <UButton to="/admin" variant="ghost" class="rounded-xl bg-white hover:!bg-black hover:!text-white">← Назад</UButton>
         </div>
       </div>
 
       <UCard variant="soft" class="bg-white rounded-2xl p-5 mb-6">
         <div class="flex flex-wrap items-center gap-3">
           <UInput v-model="query" icon="i-lucide-search" placeholder="Поиск по названию, автору, ISBN..." class="flex-1 min-w-[260px]" />
-          <label class="flex items-center gap-2 text-sm">
+          <label class="flex items-center gap-2 text-sm text-black">
             <input type="checkbox" v-model="includeArchived" />
             Показывать архивные
           </label>
@@ -207,16 +219,16 @@ async function deleteBook(book) {
               <div class="flex items-center gap-2 flex-wrap">
                 <h3 class="font-semibold text-black">{{ b.title }}</h3>
                 <span v-if="b.genre" class="text-xs px-2 py-0.5 rounded-full bg-gray-100">{{ b.genre }}</span>
-                <span v-if="b.status === 'ARCHIVED'" class="text-xs px-2 py-0.5 rounded-full bg-orange-100 text-orange-700">архив</span>
+                <span v-if="b.status === 'ARCHIVED'" class="text-xs px-2 py-0.5 rounded-full bg-orange-100 text-orange-800">архив</span>
               </div>
               <p class="text-sm text-gray-600">{{ b.author }} • {{ b.year || '—' }}</p>
               <p class="text-xs text-gray-400">ISBN: {{ b.isbn || '—' }}</p>
             </div>
             <div class="flex flex-col gap-2">
               <UButton size="xs" color="primary" variant="soft" @click="openEdit(b)">Изменить</UButton>
-              <UButton v-if="b.status === 'ACTIVE'" size="xs" color="warning" variant="soft" @click="archive(b)">Скрыть</UButton>
-              <UButton v-else size="xs" color="green" variant="soft" @click="restore(b)">Вернуть</UButton>
-              <UButton size="xs" color="red" variant="soft" @click="deleteBook(b)">Удалить</UButton>
+              <UButton v-if="b.status === 'ACTIVE'" size="xs" color="error" variant="soft" @click="archive(b)">Скрыть</UButton>
+              <UButton v-else size="xs" color="success" variant="soft" @click="restore(b)">Вернуть</UButton>
+              <UButton size="xs" color="error" variant="soft" @click="deleteBook(b)">Удалить</UButton>
             </div>
           </div>
         </div>
@@ -229,36 +241,36 @@ async function deleteBook(book) {
 
             <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
               <UFormField label="Название">
-                <UInput v-model="form.title" />
+                <UInput v-model="form.title" placeholder="Например: Мастер и Маргарита" class="w-full" />
               </UFormField>
               <UFormField label="Автор">
-                <UInput v-model="form.author" />
+                <UInput v-model="form.author" placeholder="Например: Михаил Булгаков" class="w-full" />
               </UFormField>
               <UFormField label="Жанр">
-                <UInput v-model="form.genre" />
+                <UInput v-model="form.genre" placeholder="Например: Роман" class="w-full" />
               </UFormField>
               <UFormField label="Год">
-                <UInput v-model.number="form.year" type="number" />
+                <UInput v-model.number="form.year" type="number" placeholder="Год написания" class="w-full" />
               </UFormField>
               <UFormField label="Издательство">
-                <UInput v-model="form.publisher" />
+                <UInput v-model="form.publisher" placeholder="Например: АСТ" class="w-full" />
               </UFormField>
               <UFormField label="Год издания">
-                <UInput v-model.number="form.publishYear" type="number" />
+                <UInput v-model.number="form.publishYear" type="number" placeholder="Год публикации" class="w-full" />
               </UFormField>
               <UFormField label="Страниц">
-                <UInput v-model.number="form.pages" type="number" />
+                <UInput v-model.number="form.pages" type="number" placeholder="Количество страниц" class="w-full" />
               </UFormField>
               <UFormField label="ISBN">
-                <UInput v-model="form.isbn" />
+                <UInput v-model="form.isbn" placeholder="Например: 978-5-17-038942-4" class="w-full" />
               </UFormField>
             </div>
 
             <UFormField label="Краткое описание">
-              <UTextarea v-model="form.description" :rows="2" />
+              <UTextarea v-model="form.description" :rows="2" placeholder="Одно-два предложения для карточки книги в каталоге" class="w-full" />
             </UFormField>
             <UFormField label="Полное описание">
-              <UTextarea v-model="form.fullDescription" :rows="4" />
+              <UTextarea v-model="form.fullDescription" :rows="4" placeholder="Развёрнутое описание для страницы книги" class="w-full" />
             </UFormField>
 
             <UFormField label="Обложка">
@@ -270,7 +282,7 @@ async function deleteBook(book) {
         </template>
         <template #footer>
           <div class="flex justify-end gap-3 w-full">
-            <UButton variant="outline" @click="editOpen = false">Отмена</UButton>
+            <UButton variant="outline" class="bg-white hover:!text-white" @click="editOpen = false">Отмена</UButton>
             <UButton :loading="saving" color="primary" @click="save">Сохранить</UButton>
           </div>
         </template>

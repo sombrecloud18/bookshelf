@@ -66,6 +66,9 @@ const rejectReason = ref('');
 function openRejectModal(collection) {
   rejectingCollection.value = collection;
   rejectReason.value = '';
+  // Закрываем «Подробнее», чтобы поверх не было двух модалок одновременно —
+  // пользователь должен видеть только окно ввода причины отклонения.
+  showDetailsModal.value = false;
   showRejectModal.value = true;
 }
 
@@ -96,7 +99,7 @@ async function confirmReject() {
           <h1 class="text-4xl font-bold text-black">Модерация подборок</h1>
           <p class="text-gray-700 mt-2">На проверке: {{ collectionsQueue.length }} подборок</p>
         </div>
-        <UButton to="/admin" variant="ghost" class="rounded-xl">← Назад</UButton>
+        <UButton to="/admin" variant="ghost" class="rounded-xl bg-white hover:!bg-black hover:!text-white">← Назад</UButton>
       </div>
 
       <div v-if="loading" class="flex justify-center py-12">
@@ -105,7 +108,7 @@ async function confirmReject() {
 
       <UCard v-else variant="soft" class="bg-white rounded-2xl p-5">
         <div v-if="collectionsQueue.length === 0" class="text-center py-12 text-gray-500">
-          <svg class="w-16 h-16 mx-auto mb-4 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg class="w-16 h-16 mx-auto mb-4 text-black" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path
               stroke-linecap="round"
               stroke-linejoin="round"
@@ -117,75 +120,49 @@ async function confirmReject() {
           <p class="text-sm mt-1">Все подборки проверены</p>
         </div>
 
-        <div v-else class="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div v-else class="space-y-4">
           <UCard
             v-for="collection in collectionsQueue"
             :key="collection.id"
             variant="soft"
-            class="hover:shadow-xl transition-all duration-300 rounded-2xl bg-white border border-gray-200"
+            class="bg-white rounded-xl border border-gray-200 hover:shadow-md transition-shadow"
           >
-            <div class="flex flex-col">
-              <div class="flex items-center justify-between">
-                <span
-                  v-if="collection.genre"
-                  class="inline-flex px-3 py-1 text-sm font-medium rounded-md"
-                  :class="getGenreColor(collection.genre)"
-                >
-                  {{ collection.genre }}
-                </span>
-                <span class="text-xs text-gray-400">{{ formatDate(collection.createdAt) }}</span>
-              </div>
+            <div class="flex flex-col md:flex-row justify-between gap-4">
+              <div class="flex-1">
+                <div class="flex items-start justify-between">
+                  <div>
+                    <h3 class="text-xl font-bold text-black">{{ collection.title }}</h3>
+                    <div v-if="collection.genre" class="mt-1">
+                      <span
+                        class="inline-flex px-3 py-0.5 text-xs font-medium rounded-full"
+                        :class="getGenreColor(collection.genre)"
+                      >
+                        {{ collection.genre }}
+                      </span>
+                    </div>
+                  </div>
+                  <span class="inline-flex px-3 py-1 text-xs font-medium rounded-full bg-yellow-100 text-yellow-800">
+                    На модерации
+                  </span>
+                </div>
 
-              <div class="mt-3">
-                <h2 class="text-xl font-bold text-black line-clamp-2">{{ collection.title }}</h2>
-                <p class="text-sm text-gray-600 mt-1">Автор: {{ collection.authorName || collection.author }}</p>
-                <p v-if="collection.description" class="mt-2 text-sm text-gray-700 line-clamp-2">
-                  {{ collection.description }}
-                </p>
-                <p class="mt-2 text-xs text-gray-500">Книг: {{ (collection.bookIds || []).length }}</p>
-              </div>
+                <p v-if="collection.description" class="mt-2 text-gray-700">{{ collection.description }}</p>
 
-              <div class="aspect-2/3 w-full overflow-hidden rounded-lg mt-4 bg-gray-100 flex items-center justify-center">
-                <div class="relative h-[80%] w-[78%]">
-                  <div v-if="(collection.bookIds || []).length === 0" class="text-xs text-gray-500 text-center">Нет книг</div>
-                  <template v-else>
-                    <img
-                      v-for="(b, idx) in (collection.bookIds || []).slice(-2).map(id => booksCache[id]).filter(Boolean).reverse()"
-                      :key="b.id"
-                      class="absolute h-full rounded-2xl shadow-lg border border-white bg-white/90 p-1 object-cover"
-                      :style="{
-                        right: `${idx * 22}px`,
-                        top: `calc(50% + ${idx * 10}px)`,
-                        transform: 'translateY(-50%)',
-                        zIndex: 10 + idx,
-                      }"
-                      :src="b.coverUrl || b.imageUrl || ''"
-                      :alt="b.title"
-                    />
-                  </template>
+                <div class="mt-3 flex flex-wrap gap-4 text-sm text-gray-500">
+                  <span>📚 Книг: {{ (collection.bookIds || []).length }}</span>
+                  <span>👤 Автор: {{ collection.authorName || collection.author }}</span>
+                  <span>📅 {{ formatDate(collection.createdAt) }}</span>
                 </div>
               </div>
 
-              <div class="flex gap-2 mt-4 pt-2">
-                <UButton
-                  size="sm"
-                  color="primary"
-                  variant="soft"
-                  class="flex-1 rounded-xl"
-                  @click="viewDetails(collection)"
-                >
+              <div class="flex gap-2 items-start">
+                <UButton size="sm" color="primary" variant="soft" class="rounded-xl" @click="viewDetails(collection)">
                   Подробнее
                 </UButton>
-                <UButton size="sm" color="green" class="rounded-xl" @click="approveCollection(collection.id)">
+                <UButton size="sm" color="success" variant="soft" class="rounded-xl" @click="approveCollection(collection.id)">
                   Одобрить
                 </UButton>
-                <UButton
-                  size="sm"
-                  color="red"
-                  variant="soft"
-                  class="rounded-xl"
-                  @click="openRejectModal(collection)"
-                >
+                <UButton size="sm" color="error" variant="soft" class="rounded-xl" @click="openRejectModal(collection)">
                   Отклонить
                 </UButton>
               </div>
@@ -261,7 +238,7 @@ async function confirmReject() {
 
         <template #footer>
           <div class="flex justify-end gap-3 w-full">
-            <UButton variant="outline" @click="showDetailsModal = false">Закрыть</UButton>
+            <UButton variant="outline" class="bg-white hover:!text-white" @click="showDetailsModal = false">Закрыть</UButton>
           </div>
         </template>
       </UModal>
@@ -281,8 +258,8 @@ async function confirmReject() {
         </template>
         <template #footer>
           <div class="flex justify-end gap-3 w-full">
-            <UButton variant="outline" @click="showRejectModal = false">Отмена</UButton>
-            <UButton color="red" @click="confirmReject">Отклонить</UButton>
+            <UButton variant="outline" class="bg-white hover:!text-white" @click="showRejectModal = false">Отмена</UButton>
+            <UButton color="error" variant="soft" @click="confirmReject">Отклонить</UButton>
           </div>
         </template>
       </UModal>

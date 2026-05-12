@@ -105,6 +105,16 @@ const router = createRouter({
   routes,
 });
 
+// Pages that don't appear in the sidebar (e.g. /book/:id) should keep the
+// previous "primary" tab highlighted. We persist the latest primary route
+// path in sessionStorage and consume it from the sidebar.
+const PRIMARY_PATHS = ['/', '/account', '/collections', '/orders', '/reviews'];
+router.afterEach(to => {
+  if (PRIMARY_PATHS.includes(to.path)) {
+    sessionStorage.setItem('bookshelf_active_sidebar', to.path);
+  }
+});
+
 router.beforeEach(to => {
   const { token, role } = getAuth();
 

@@ -2,6 +2,9 @@
 import { computed, ref, onMounted } from 'vue';
 import { getGenreColor } from '../../constants/genreColors';
 import { api } from '../../api.js';
+import { useConfirm } from '../../composables/useConfirm.js';
+
+const askConfirm = useConfirm();
 
 // ── Data ────────────────────────────────────────────────────────────────────
 const collections = ref([]);
@@ -30,7 +33,11 @@ async function loadAll() {
 onMounted(loadAll);
 
 async function deleteSubjectCollection(sc) {
-  if (!window.confirm(`Удалить учебную подборку «${sc.title}»? Действие необратимо.`)) return;
+  const ok = await askConfirm(`Удалить учебную подборку «${sc.title}»? Действие необратимо.`, {
+    title: 'Удаление учебной подборки',
+    confirmLabel: 'Удалить',
+  });
+  if (!ok) return;
   try {
     await api.delete(`/subject-collections/${sc.id}`);
     subjectCollections.value = subjectCollections.value.filter(x => x.id !== sc.id);
@@ -297,7 +304,11 @@ async function saveSubjectEdit() {
 async function deleteCollectionById(collectionId) {
   const target = collections.value.find(c => c.id === collectionId);
   const name = target?.title ? `«${target.title}»` : 'эту подборку';
-  if (!window.confirm(`Удалить ${name}? Это действие нельзя отменить.`)) return;
+  const ok = await askConfirm(`Удалить ${name}? Это действие нельзя отменить.`, {
+    title: 'Удаление подборки',
+    confirmLabel: 'Удалить',
+  });
+  if (!ok) return;
   try {
     await api.delete(`/collections/${collectionId}`);
     collections.value = collections.value.filter(c => c.id !== collectionId);
@@ -318,7 +329,12 @@ async function publishCollection(collectionId) {
     publishError.value = 'Сначала добавьте книги в подборку';
     return;
   }
-  if (!window.confirm(`Отправить «${collection.title}» на модерацию?`)) return;
+  const okPublish = await askConfirm(`Отправить «${collection.title}» на модерацию?`, {
+    title: 'Отправка на модерацию',
+    confirmLabel: 'Отправить',
+    variant: 'primary',
+  });
+  if (!okPublish) return;
   publishingId.value = collectionId;
   publishError.value = null;
   try {
@@ -344,9 +360,9 @@ function statusLabel(status) {
 function statusClass(status) {
   switch (status) {
     case 'DRAFT': return 'bg-gray-100 text-gray-700';
-    case 'PENDING': return 'bg-yellow-100 text-yellow-700';
-    case 'APPROVED': return 'bg-green-100 text-green-700';
-    case 'REJECTED': return 'bg-red-100 text-red-700';
+    case 'PENDING': return 'bg-yellow-100 text-yellow-800';
+    case 'APPROVED': return 'bg-green-100 text-green-800';
+    case 'REJECTED': return 'bg-red-100 text-red-800';
     default: return 'bg-gray-100 text-gray-700';
   }
 }
@@ -408,31 +424,29 @@ async function createCollection() {
           <div class="flex flex-col">
             <div class="flex items-center justify-between gap-3 h-8">
               <span
-                v-if="c.genre"
-                class="inline-flex px-4 py-1 text-sm font-medium rounded-md"
-                :class="getGenreColor(c.genre)"
+                class="inline-flex px-4 py-1 text-sm font-medium rounded-md min-h-7"
+                :class="c.genre ? getGenreColor(c.genre) : 'opacity-0'"
               >
-                {{ c.genre }}
+                {{ c.genre || '—' }}
               </span>
               <span class="inline-flex px-3 py-0.5 text-xs font-medium rounded-full" :class="statusClass(c.status)">
                 {{ statusLabel(c.status) }}
               </span>
             </div>
 
-            <div class="flex min-h-16 items-center justify-center">
-              <div class="w-full">
-                <h2 class="text-lg font-extrabold text-center line-clamp-2 text-black min-h-12">
-                  {{ c.title }}
-                </h2>
-                <p v-if="c.description" class="mt-2 text-sm text-gray-700 text-center line-clamp-2 min-h-10">
-                  {{ c.description }}
-                </p>
-                <p class="mt-2 text-xs text-gray-500 text-center">Книг: {{ (c.bookIds || []).length }}</p>
-                <p v-if="c.status === 'REJECTED' && c.moderatorComment" class="mt-2 text-xs text-red-700 bg-red-50 p-2 rounded">
-                  <span class="font-semibold">Причина отказа:</span> {{ c.moderatorComment }}
-                </p>
-              </div>
-            </div>
+            <h2 class="mt-2 text-lg font-extrabold text-center line-clamp-2 text-black h-14 flex items-center justify-center">
+              {{ c.title }}
+            </h2>
+            <p class="text-sm text-gray-700 text-center line-clamp-2 h-10">
+              {{ c.description || '' }}
+            </p>
+            <p class="mt-2 text-xs text-gray-500 text-center h-4">Книг: {{ (c.bookIds || []).length }}</p>
+            <p
+              v-if="c.status === 'REJECTED' && c.moderatorComment"
+              class="mt-2 text-xs text-red-800 bg-red-100 p-2 rounded line-clamp-2"
+            >
+              <span class="font-semibold">Причина отказа:</span> {{ c.moderatorComment }}
+            </p>
           </div>
 
           <div class="aspect-2/3 w-full overflow-hidden rounded-lg mt-4 bg-gray-100 flex items-center justify-center">
@@ -468,13 +482,14 @@ async function createCollection() {
             >
               Редактировать
             </UButton>
-            <UButton size="sm" variant="outline" class="flex-1 justify-center" @click="openView(c.id)">
+            <UButton size="sm" variant="outline" class="flex-1 justify-center bg-white hover:!text-white" @click="openView(c.id)">
               Подробнее
             </UButton>
             <UButton
               v-if="isPublishable(c.status)"
               size="sm"
-              color="green"
+              color="success"
+              variant="soft"
               :loading="publishingId === c.id"
               :disabled="(c.bookIds || []).length === 0"
               class="w-full justify-center"
@@ -504,7 +519,7 @@ async function createCollection() {
       <div class="mt-12">
         <div class="flex items-center justify-between gap-4 mb-6">
           <h2 class="text-3xl font-bold text-black">Мои учебные подборки</h2>
-          <UButton variant="outline" class="rounded-xl" to="/?tab=subjects">Создать на вкладке «Предметы»</UButton>
+          <UButton class="bg-white text-black rounded-xl" to="/?tab=subjects">Создать на вкладке «Предметы»</UButton>
         </div>
 
         <div
@@ -518,8 +533,8 @@ async function createCollection() {
             class="hover:shadow-xl transition-all duration-300 rounded-2xl bg-white flex flex-col h-full"
           >
             <div class="flex flex-col">
-              <div class="flex items-center justify-between gap-2">
-                <span class="inline-flex px-3 py-0.5 text-xs font-medium rounded-full bg-blue-100 text-blue-700">
+              <div class="flex items-center justify-between gap-2 h-7">
+                <span class="inline-flex px-3 py-0.5 text-xs font-medium rounded-full bg-blue-100 text-blue-800">
                   {{ sc.specialty }}
                 </span>
                 <span class="inline-flex px-3 py-0.5 text-xs font-medium rounded-full" :class="statusClass(sc.status)">
@@ -527,28 +542,27 @@ async function createCollection() {
                 </span>
               </div>
 
-              <div class="mt-3">
+              <div class="mt-3 h-12">
                 <p class="text-xs text-gray-500">Предмет:</p>
-                <p class="font-semibold text-black break-words" style="overflow-wrap: anywhere">{{ sc.subject }}</p>
+                <p class="font-semibold text-black line-clamp-1 break-words" style="overflow-wrap: anywhere">{{ sc.subject }}</p>
               </div>
 
-              <h3 class="mt-3 text-lg font-extrabold text-black line-clamp-2 break-words" style="overflow-wrap: anywhere">
+              <h3 class="mt-3 text-lg font-extrabold text-black line-clamp-2 break-words h-14" style="overflow-wrap: anywhere">
                 {{ sc.title }}
               </h3>
 
               <p
-                v-if="sc.description"
-                class="mt-2 text-sm text-gray-700 line-clamp-3 break-words"
+                class="mt-2 text-sm text-gray-700 line-clamp-3 break-words h-15"
                 style="overflow-wrap: anywhere"
               >
-                {{ sc.description }}
+                {{ sc.description || '' }}
               </p>
 
-              <p class="mt-2 text-xs text-gray-500">Книг: {{ (sc.bookIds || []).length }}</p>
+              <p class="mt-2 text-xs text-gray-500 h-4">Книг: {{ (sc.bookIds || []).length }}</p>
 
               <p
                 v-if="sc.status === 'REJECTED' && sc.moderatorComment"
-                class="mt-2 text-xs text-red-700 bg-red-50 p-2 rounded break-words"
+                class="mt-2 text-xs text-red-800 bg-red-100 p-2 rounded break-words line-clamp-2"
                 style="overflow-wrap: anywhere"
               >
                 <span class="font-semibold">Причина отказа:</span> {{ sc.moderatorComment }}
@@ -640,7 +654,7 @@ async function createCollection() {
                     <div class="font-semibold text-black line-clamp-1">{{ b.title }}</div>
                     <div class="text-xs text-gray-600 line-clamp-2 mt-1">{{ b.description }}</div>
                     <div class="mt-2">
-                      <UButton size="xs" variant="outline" @click="addToCreateSelected(b.id)"> Добавить </UButton>
+                      <UButton size="xs" variant="outline" class="bg-white hover:!text-white" @click="addToCreateSelected(b.id)"> Добавить </UButton>
                     </div>
                   </div>
                 </div>
@@ -680,7 +694,7 @@ async function createCollection() {
                     <div class="font-semibold text-black line-clamp-1">{{ b.title }}</div>
                     <div class="text-xs text-gray-600 line-clamp-2 mt-1">{{ b.description }}</div>
                     <div class="mt-2 flex gap-2">
-                      <UButton size="xs" color="red" variant="soft" @click="removeFromCreateSelected(b.id)">
+                      <UButton size="xs" color="error" variant="soft" @click="removeFromCreateSelected(b.id)">
                         Удалить
                       </UButton>
                     </div>
@@ -697,7 +711,7 @@ async function createCollection() {
 
     <template #footer>
       <div class="flex justify-end gap-3 w-full">
-        <UButton variant="outline" @click="createOpen = false">Отмена</UButton>
+        <UButton variant="outline" class="bg-white hover:!text-white" @click="createOpen = false">Отмена</UButton>
         <UButton :loading="createSaving" class="bg-green-300 text-black rounded-xl" @click="createCollection"> Создать </UButton>
       </div>
     </template>
@@ -709,7 +723,7 @@ async function createCollection() {
       <div class="space-y-5">
         <UAlert
           v-if="(collections.find(c => c.id === editingCollectionId) || {}).status === 'APPROVED'"
-          color="warning"
+          color="error"
           variant="soft"
           description="После сохранения подборка снова отправится на модерацию администратора."
         />
@@ -756,7 +770,7 @@ async function createCollection() {
                     <div class="font-semibold text-black line-clamp-1">{{ b.title }}</div>
                     <div class="text-xs text-gray-600 line-clamp-2 mt-1">{{ b.description }}</div>
                     <div class="mt-2">
-                      <UButton size="xs" variant="outline" @click="addToEditSelected(b.id)"> Добавить </UButton>
+                      <UButton size="xs" variant="outline" class="bg-white hover:!text-white" @click="addToEditSelected(b.id)"> Добавить </UButton>
                     </div>
                   </div>
                 </div>
@@ -796,7 +810,7 @@ async function createCollection() {
                     <div class="font-semibold text-black line-clamp-1">{{ b.title }}</div>
                     <div class="text-xs text-gray-600 line-clamp-2 mt-1">{{ b.description }}</div>
                     <div class="mt-2 flex gap-2">
-                      <UButton size="xs" color="red" variant="soft" @click="removeFromEditSelected(b.id)">
+                      <UButton size="xs" color="error" variant="soft" @click="removeFromEditSelected(b.id)">
                         Удалить
                       </UButton>
                     </div>
@@ -816,14 +830,13 @@ async function createCollection() {
         <UButton
           color="error"
           variant="soft"
-          class="rounded-xl"
           @click="editingCollectionId && deleteCollectionById(editingCollectionId)"
         >
           Удалить подборку
         </UButton>
 
         <div class="flex justify-end gap-3">
-          <UButton variant="outline" @click="editOpen = false">Отмена</UButton>
+          <UButton variant="outline" class="bg-white hover:!text-white" @click="editOpen = false">Отмена</UButton>
           <UButton :loading="editSaving" class="bg-green-300 text-black rounded-xl" @click="saveEdit"> Сохранить </UButton>
         </div>
       </div>
@@ -836,7 +849,7 @@ async function createCollection() {
       <div v-if="subjectEditTarget" class="space-y-5">
         <UAlert
           v-if="subjectEditTarget.status === 'APPROVED'"
-          color="warning"
+          color="error"
           variant="soft"
           description="После сохранения подборка снова отправится на модерацию администратора."
         />
@@ -864,7 +877,7 @@ async function createCollection() {
               v-for="b in selectedBooks(subjectEditSelectedIds)"
               :key="b.id"
               type="button"
-              class="px-2 py-1 rounded-full bg-blue-100 text-blue-700 text-xs hover:bg-blue-200"
+              class="px-2 py-1 rounded-full bg-blue-100 text-blue-800 text-xs hover:bg-blue-100"
               @click="subjectEditSelectedIds = subjectEditSelectedIds.filter(id => id !== b.id)"
             >
               {{ b.title }} ✕
@@ -899,7 +912,7 @@ async function createCollection() {
 
     <template #footer>
       <div class="flex justify-end gap-3 w-full">
-        <UButton variant="outline" @click="subjectEditOpen = false">Отмена</UButton>
+        <UButton variant="outline" class="bg-white hover:!text-white" @click="subjectEditOpen = false">Отмена</UButton>
         <UButton :loading="subjectEditSaving" class="bg-green-300 text-black rounded-xl" @click="saveSubjectEdit">
           Сохранить
         </UButton>
@@ -949,7 +962,7 @@ async function createCollection() {
 
     <template #footer>
       <div class="flex justify-end gap-3 w-full">
-        <UButton variant="outline" @click="viewOpen = false">Закрыть</UButton>
+        <UButton variant="outline" class="bg-white hover:!text-white" @click="viewOpen = false">Закрыть</UButton>
       </div>
     </template>
   </UModal>

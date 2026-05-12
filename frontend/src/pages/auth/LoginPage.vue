@@ -41,7 +41,7 @@ async function submit() {
 </script>
 
 <template>
-  <div class="min-h-screen bg-[#a3b5ff]">
+  <div class="min-h-screen bg-[#a3b5ff] auth-page">
     <AppHeader />
     <main class="pt-20">
       <div class="max-w-7xl mx-auto px-8">
@@ -85,7 +85,7 @@ async function submit() {
               <UButton :loading="loading" class="bg-[#e9b6f0] text-black rounded-md px-10" size="lg" @click="submit">
                 Войти
               </UButton>
-              <UButton variant="outline" color="neutral" class="rounded-md" size="lg" to="/registration">
+              <UButton variant="outline" color="neutral" class="rounded-md bg-white" size="lg" to="/registration">
                 Регистрация
               </UButton>
             </div>

@@ -176,7 +176,7 @@ async function changeLogin() {
 </script>
 
 <template>
-  <div class="p-8">
+  <div class="p-8 account-page">
     <div v-if="loading" class="flex justify-center py-12">
       <div class="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-500"></div>
     </div>
@@ -196,10 +196,10 @@ async function changeLogin() {
               {{ [profile?.faculty, profile?.specialty, profile?.course].filter(Boolean).join(', ') }}
             </template>
           </p>
-          <p class="text-gray-700">
+          <p class="text-black">
             <span class="font-semibold">Логин:</span> {{ profile?.login }}
           </p>
-          <p class="text-gray-600">{{ roleLabel }}</p>
+          <p class="text-black">{{ roleLabel }}</p>
         </div>
       </div>
 
@@ -249,18 +249,16 @@ async function changeLogin() {
 
               <Select v-model="formData.course" label="Курс" name="course" :items="courses" placeholder="Выберите курс" />
             </template>
-          </div>
 
-          <template v-if="isTeacher">
-            <div class="flex gap-4 w-full max-w-xl">
+            <template v-else>
               <UFormField label="Кафедра" name="department" class="flex-1">
                 <UInput v-model="formData.department" highlight variant="outline" size="xl" placeholder="Например: Кафедра ПОИТ" />
               </UFormField>
               <UFormField label="Должность" name="position" class="flex-1">
                 <UInput v-model="formData.position" highlight variant="outline" size="xl" placeholder="Например: Доцент" />
               </UFormField>
-            </div>
-          </template>
+            </template>
+          </div>
 
           <UFormField label="Номер телефона" name="phoneNumber">
             <UInput
@@ -292,7 +290,7 @@ async function changeLogin() {
 
           <div class="flex gap-3">
             <UButton type="submit" class="bg-green-300 text-black rounded-xl" size="xl"> Сохранить </UButton>
-            <UButton type="button" color="neutral" variant="outline" class="rounded-xl" @click="resetForm">
+            <UButton type="button" color="neutral" variant="outline" class="rounded-xl bg-white" @click="resetForm">
               Отмена
             </UButton>
           </div>

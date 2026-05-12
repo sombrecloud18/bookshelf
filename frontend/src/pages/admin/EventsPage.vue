@@ -1,6 +1,9 @@
 <script setup>
 import { ref, onMounted } from 'vue';
 import { api } from '../../api.js';
+import { useConfirm } from '../../composables/useConfirm.js';
+
+const askConfirm = useConfirm();
 
 const events = ref([]);
 const loading = ref(true);
@@ -85,7 +88,11 @@ async function addEvent() {
 
 async function removeEvent(id) {
   const event = events.value.find(e => e.id === id);
-  if (!confirm(`Удалить мероприятие «${event?.title}»?`)) return;
+  const ok = await askConfirm(`Удалить мероприятие «${event?.title}»?`, {
+    title: 'Удаление мероприятия',
+    confirmLabel: 'Удалить',
+  });
+  if (!ok) return;
   try {
     await api.delete(`/events/${id}`);
     events.value = events.value.filter(e => e.id !== id);
@@ -100,29 +107,29 @@ async function removeEvent(id) {
     <div class="max-w-7xl mx-auto">
       <div class="flex items-center justify-between mb-8">
         <h1 class="text-4xl font-bold text-black">Управление мероприятиями</h1>
-        <UButton to="/admin" variant="ghost" class="rounded-xl">← Назад</UButton>
+        <UButton to="/admin" variant="ghost" class="rounded-xl bg-white hover:!bg-black hover:!text-white">← Назад</UButton>
       </div>
 
       <UCard variant="soft" class="bg-white rounded-2xl p-5">
         <h2 class="text-lg font-semibold text-black">Создать мероприятие</h2>
-        <div class="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
-          <UFormField label="Дата">
-            <UInput v-model="form.date" type="date" />
+        <div class="mt-4 grid grid-cols-1 md:grid-cols-6 gap-4">
+          <UFormField label="Название" class="md:col-span-6" :ui="{ label: 'text-gray-700' }">
+            <UInput v-model="form.title" placeholder="Например: Встреча книжного клуба" class="w-full" />
           </UFormField>
-          <UFormField label="Время">
-            <UInput v-model="form.time" type="time" placeholder="18:00" />
+          <UFormField label="Дата" class="md:col-span-2" :ui="{ label: 'text-gray-700' }">
+            <UInput v-model="form.date" type="date" class="w-full" />
           </UFormField>
-          <UFormField label="Название">
-            <UInput v-model="form.title" placeholder="Название мероприятия" />
+          <UFormField label="Время" class="md:col-span-2" :ui="{ label: 'text-gray-700' }">
+            <UInput v-model="form.time" type="time" placeholder="18:00" class="w-full" />
           </UFormField>
-          <UFormField label="Локация">
-            <UInput v-model="form.location" placeholder="Место проведения" />
+          <UFormField label="Максимум участников" class="md:col-span-2" :ui="{ label: 'text-gray-700' }">
+            <UInput v-model="form.maxParticipants" type="number" placeholder="Не ограничено" class="w-full" />
           </UFormField>
-          <UFormField label="Максимум участников">
-            <UInput v-model="form.maxParticipants" type="number" placeholder="Не ограничено" />
+          <UFormField label="Локация" class="md:col-span-6" :ui="{ label: 'text-gray-700' }">
+            <UInput v-model="form.location" placeholder="Например: БГУИР, корпус 1, ауд. 320" class="w-full" />
           </UFormField>
-          <UFormField label="Описание" class="md:col-span-2">
-            <UTextarea v-model="form.description" :rows="3" placeholder="Краткое описание мероприятия" />
+          <UFormField label="Описание" class="md:col-span-6" :ui="{ label: 'text-gray-700' }">
+            <UTextarea v-model="form.description" :rows="3" placeholder="О чём встреча, что обсудим, что брать с собой" class="w-full" />
           </UFormField>
         </div>
         <div class="mt-4 flex justify-end">
@@ -160,7 +167,7 @@ async function removeEvent(id) {
             <UButton size="xs" variant="soft" color="primary" class="rounded-xl" @click="openEdit(e)">
               Редактировать
             </UButton>
-            <UButton size="xs" color="red" variant="soft" class="rounded-xl" @click="removeEvent(e.id)">
+            <UButton size="xs" color="error" variant="soft" class="rounded-xl" @click="removeEvent(e.id)">
               Удалить
             </UButton>
           </div>
@@ -192,7 +199,7 @@ async function removeEvent(id) {
         </template>
         <template #footer>
           <div class="flex justify-end gap-3 w-full">
-            <UButton variant="outline" @click="showDetailsModal = false">Закрыть</UButton>
+            <UButton variant="outline" class="bg-white hover:!text-white" @click="showDetailsModal = false">Закрыть</UButton>
           </div>
         </template>
       </UModal>
@@ -202,31 +209,31 @@ async function removeEvent(id) {
         <template #body>
           <div v-if="selectedEvent" class="space-y-4">
             <h2 class="text-xl font-bold text-black mb-4">Редактировать мероприятие</h2>
-            <div class="grid grid-cols-1 gap-4">
-              <UFormField label="Название">
-                <UInput v-model="selectedEvent.title" />
+            <div class="grid grid-cols-1 gap-4 w-full">
+              <UFormField label="Название" class="w-full">
+                <UInput v-model="selectedEvent.title" class="w-full" />
               </UFormField>
-              <UFormField label="Дата">
-                <UInput v-model="selectedEvent.date" type="date" />
+              <UFormField label="Дата" class="w-full">
+                <UInput v-model="selectedEvent.date" type="date" class="w-full" />
               </UFormField>
-              <UFormField label="Время">
-                <UInput v-model="selectedEvent.time" type="time" />
+              <UFormField label="Время" class="w-full">
+                <UInput v-model="selectedEvent.time" type="time" class="w-full" />
               </UFormField>
-              <UFormField label="Локация">
-                <UInput v-model="selectedEvent.location" />
+              <UFormField label="Локация" class="w-full">
+                <UInput v-model="selectedEvent.location" class="w-full" />
               </UFormField>
-              <UFormField label="Максимум участников">
-                <UInput v-model="selectedEvent.maxParticipants" type="number" />
+              <UFormField label="Максимум участников" class="w-full">
+                <UInput v-model="selectedEvent.maxParticipants" type="number" class="w-full" />
               </UFormField>
-              <UFormField label="Описание">
-                <UTextarea v-model="selectedEvent.description" :rows="4" />
+              <UFormField label="Описание" class="w-full">
+                <UTextarea v-model="selectedEvent.description" :rows="4" class="w-full" />
               </UFormField>
             </div>
           </div>
         </template>
         <template #footer>
           <div class="flex justify-end gap-3 w-full">
-            <UButton variant="outline" @click="showEditModal = false">Отмена</UButton>
+            <UButton variant="outline" class="bg-white hover:!text-white" @click="showEditModal = false">Отмена</UButton>
             <UButton :loading="saving" color="primary" @click="saveEdit">Сохранить</UButton>
           </div>
         </template>

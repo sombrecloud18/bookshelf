@@ -5,7 +5,7 @@
         <li
           v-for="item in menuItems"
           :key="item.path"
-          class="p-2 mb-1 ms-0.5 hover:bg-blue-900 hover:text-white hover:rounded-s-xl active:bg-blue-900 active:text-white active:rounded-s-xl"
+          class="p-2 mb-1 ms-0.5 text-black hover:bg-blue-900 hover:text-white hover:rounded-s-xl active:bg-blue-900 active:text-white active:rounded-s-xl"
           :class="{ 'bg-blue-900 text-white rounded-s-xl': isActive(item.path) }"
         >
           <router-link :to="item.path" class="flex items-center gap-1">

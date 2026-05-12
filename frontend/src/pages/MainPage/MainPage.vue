@@ -160,6 +160,7 @@ onMounted(() => {
             :variant="activeTab === t.id ? 'solid' : 'outline'"
             :color="activeTab === t.id ? 'primary' : 'neutral'"
             class="rounded-xl"
+            :class="activeTab === t.id ? '' : 'bg-white hover:!text-white active:!text-white'"
             @click="setTab(t.id)"
           >
             {{ t.label }}

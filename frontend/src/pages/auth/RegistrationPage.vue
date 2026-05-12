@@ -35,6 +35,11 @@ const form = reactive({
   avatarUrl: '',
 });
 
+// При регистрации токена ещё нет, поэтому файл аватара мы держим локально и
+// заливаем уже после /auth/register — там приходит JWT, под которым доступен
+// /api/files/avatars.
+const pendingAvatarFile = ref(null);
+
 const filteredSpecialties = computed(() => {
   if (!form.faculty) return [];
   return specialtiesByFaculty.value[form.faculty] || [];
@@ -102,10 +107,22 @@ async function submit() {
       department: form.userType === 'TEACHER' ? form.department.trim() || null : null,
       position: form.userType === 'TEACHER' ? form.position.trim() || null : null,
       phoneNumber: form.phoneNumber.trim() || null,
-      avatarUrl: form.avatarUrl || null,
+      avatarUrl: null,
     });
     localStorage.setItem(AUTH_TOKEN_KEY, data.token);
     localStorage.setItem(AUTH_ROLE_KEY, data.role);
+
+    if (pendingAvatarFile.value) {
+      try {
+        const uploaded = await api.upload('/files/avatars', pendingAvatarFile.value);
+        if (uploaded?.url) {
+          await api.patch('/users/me/avatar', { avatarUrl: uploaded.url });
+        }
+      } catch (avatarErr) {
+        console.warn('Аватар не загрузился, регистрация прошла без него:', avatarErr);
+      }
+    }
+
     router.push('/');
   } catch (e) {
     error.value = e.message || 'Ошибка регистрации';
@@ -116,7 +133,7 @@ async function submit() {
 </script>
 
 <template>
-  <div class="min-h-screen bg-[#a3b5ff]">
+  <div class="min-h-screen bg-[#a3b5ff] auth-page">
     <AppHeader />
     <main class="pt-20">
       <div class="max-w-7xl mx-auto px-8">
@@ -131,7 +148,7 @@ async function submit() {
                 <button
                   type="button"
                   class="px-6 py-3 rounded-xl border-2 transition-all"
-                  :class="form.userType === 'STUDENT' ? 'border-blue-600 bg-blue-50 text-black font-semibold' : 'border-gray-300 text-gray-600 hover:border-gray-400'"
+                  :class="form.userType === 'STUDENT' ? 'border-blue-500 bg-blue-50 text-black font-semibold' : 'border-gray-200 bg-white text-gray-600 hover:border-gray-200'"
                   @click="setUserType('STUDENT')"
                 >
                   Студент
@@ -139,7 +156,7 @@ async function submit() {
                 <button
                   type="button"
                   class="px-6 py-3 rounded-xl border-2 transition-all"
-                  :class="form.userType === 'TEACHER' ? 'border-blue-600 bg-blue-50 text-black font-semibold' : 'border-gray-300 text-gray-600 hover:border-gray-400'"
+                  :class="form.userType === 'TEACHER' ? 'border-blue-500 bg-blue-50 text-black font-semibold' : 'border-gray-200 bg-white text-gray-600 hover:border-gray-200'"
                   @click="setUserType('TEACHER')"
                 >
                   Преподаватель
@@ -181,7 +198,13 @@ async function submit() {
                 </UFormField>
 
                 <UFormField label="Аватар">
-                  <FileUpload v-model="form.avatarUrl" scope="avatars" label="Загрузить аватар" />
+                  <FileUpload
+                    v-model="form.avatarUrl"
+                    scope="avatars"
+                    label="Загрузить аватар"
+                    deferred
+                    @file="pendingAvatarFile = $event"
+                  />
                 </UFormField>
               </div>
 
@@ -278,7 +301,7 @@ async function submit() {
                   <UButton :loading="loading" class="bg-[#e9b6f0] text-black rounded-md px-10" size="lg" @click="submit">
                     Зарегистрироваться
                   </UButton>
-                  <UButton variant="outline" color="neutral" class="rounded-md" size="lg" to="/auth"> Войти </UButton>
+                  <UButton variant="outline" color="neutral" class="rounded-md bg-white" size="lg" to="/auth"> Войти </UButton>
                 </div>
               </div>
             </div>

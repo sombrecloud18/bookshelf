@@ -46,13 +46,13 @@ function logout() {
 
   <UModal v-model:open="logoutOpen" title="Выход из аккаунта" class="z-100">
     <template #body>
-      <div class="text-sm text-gray-700">Вы уверены, что хотите выйти?</div>
+      <div class="text-sm text-white">Вы уверены, что хотите выйти?</div>
     </template>
 
     <template #footer>
       <div class="flex justify-end gap-3 w-full">
-        <UButton variant="outline" @click="logoutOpen = false">Отмена</UButton>
-        <UButton color="error" @click="logout">Выйти</UButton>
+        <UButton variant="outline" class="bg-white hover:!text-white" @click="logoutOpen = false">Отмена</UButton>
+        <UButton color="error" variant="soft" @click="logout">Выйти</UButton>
       </div>
     </template>
   </UModal>

@@ -55,7 +55,7 @@ async function handleToggleOrder(bookId) {
       </div>
 
       <div v-else class="bg-white rounded-2xl p-8 text-center">
-        <svg class="w-24 h-24 mx-auto text-gray-300 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <svg class="w-24 h-24 mx-auto text-black mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path
             stroke-linecap="round"
             stroke-linejoin="round"

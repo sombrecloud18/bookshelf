@@ -1,0 +1,373 @@
+@startuml bookshelf-db-schema
+' =====================================================================
+' Bookshelf — детальная схема БД
+' Источник: live PostgreSQL (контейнер bookshelf-db) + Flyway V1..V7 + JPA Entity.
+' Нотация: PlantUML с Information Engineering (crow's-foot) символами.
+' =====================================================================
+
+!define PK   <b><color:#B8860B>PK</color></b>
+!define FK   <b><color:#1E90FF>FK</color></b>
+!define UQ   <b><color:#2E8B57>UQ</color></b>
+!define NN   <b>NN</b>
+!define IDX  <i>idx</i>
+
+skinparam linetype ortho
+skinparam shadowing false
+skinparam roundcorner 6
+skinparam class {
+    BackgroundColor #FAFAFA
+    BorderColor #555555
+    ArrowColor #444444
+    HeaderBackgroundColor #E8F0FE
+    AttributeIconSize 0
+}
+hide circle
+hide methods
+
+' =====================================================================
+' СПРАВОЧНИКИ — учебная иерархия (V7)
+' =====================================================================
+package "Учебная иерархия (V7)" #F4F8FF {
+
+    entity "faculties" as faculties {
+        + PK id : uuid <<uuid_generate_v4>>
+        --
+        UQ name : varchar(100) NN
+        created_at : timestamptz NN
+        updated_at : timestamptz NN
+    }
+
+    entity "specialties" as specialties {
+        + PK id : uuid
+        --
+        FK faculty_id : uuid NN  -> faculties.id  (ON DELETE CASCADE)
+        name : varchar(255) NN
+        created_at : timestamptz NN
+        updated_at : timestamptz NN
+        --
+        UQ (faculty_id, name)
+        IDX idx_specialties_faculty (faculty_id)
+    }
+
+    entity "subjects" as subjects {
+        + PK id : uuid
+        --
+        UQ name : varchar(255) NN
+        is_common : boolean NN <<default false>>
+        created_at : timestamptz NN
+        ' Заметка: до V7 был UNIQUE(specialty, name) и колонка specialty;
+        ' V7 удалил specialty, оставил глобально-уникальное name.
+    }
+
+    entity "subject_specialties" as subject_specialties <<M2M>> {
+        + PK,FK subject_id : uuid    -> subjects.id    (CASCADE)
+        + PK,FK specialty_id : uuid  -> specialties.id (CASCADE)
+        --
+        IDX idx_subject_specialties_specialty (specialty_id)
+    }
+}
+
+faculties           ||--o{ specialties           : "faculty_id"
+subjects            ||--o{ subject_specialties   : "subject_id"
+specialties         ||--o{ subject_specialties   : "specialty_id"
+
+
+' =====================================================================
+' ПОЛЬЗОВАТЕЛИ
+' =====================================================================
+entity "users" as users {
+    + PK id : uuid
+    --
+    UQ login : varchar(100) NN
+    UQ email : varchar(255) NN
+    password_hash : varchar(255) NN
+    first_name : varchar(100)
+    last_name  : varchar(100)
+    patronymic : varchar(100)
+    --
+    ' Учебный профиль (строки, не FK — legacy)
+    faculty   : varchar(255)
+    specialty : varchar(255)
+    course    : varchar(50)
+    --
+    phone_number : varchar(50)
+    avatar_url   : text
+    --
+    role       : varchar(50)  NN <<'USER' | 'MODERATOR'>>
+    user_type  : varchar(20)  NN <<'STUDENT' | 'TEACHER'>>  (V4)
+    department : varchar(255)                              (V4, для преподавателей)
+    position   : varchar(255)                              (V4, для преподавателей)
+    is_blocked : boolean NN <<default false>>
+    --
+    created_at : timestamptz NN
+    updated_at : timestamptz NN
+}
+
+entity "user_preferences" as user_preferences {
+    + PK id : uuid
+    --
+    UQ FK user_id : uuid NN   -> users.id  (CASCADE)
+    favorite_genres  : text[]
+    favorite_authors : text[]
+    updated_at : timestamptz NN
+}
+
+users ||--o| user_preferences : "1:1"
+
+
+' =====================================================================
+' КАТАЛОГ КНИГ
+' =====================================================================
+entity "books" as books {
+    + PK id : uuid
+    --
+    title  : varchar(255) NN
+    author : varchar(255) NN
+    genre  : varchar(100)
+    year   : integer
+    --
+    description      : text
+    full_description : text
+    image_url        : text
+    cover_url        : text
+    --
+    pages        : integer
+    publisher    : varchar(255)
+    publish_year : integer
+    isbn         : varchar(30)
+    --
+    status : varchar(20) NN <<'ACTIVE' | 'ARCHIVED'>>  (V4)
+    --
+    search_vector : tsvector  <<russian, A=title B=author C=genre D=description>>
+    created_at : timestamptz NN
+    updated_at : timestamptz NN
+    --
+    IDX idx_books_search_vector  GIN(search_vector)
+    IDX idx_books_status         (status)
+    TRG books_search_vector_trigger BEFORE INSERT/UPDATE
+}
+
+
+' =====================================================================
+' РЕЦЕНЗИИ + ПОДБОРКИ ПОЛЬЗОВАТЕЛЕЙ
+' =====================================================================
+entity "reviews" as reviews {
+    + PK id : uuid
+    --
+    FK book_id : uuid NN  -> books.id (CASCADE)
+    FK user_id : uuid NN  -> users.id (CASCADE)
+    rating : integer NN  <<CHECK 1..5>>
+    text   : text
+    status : varchar(50) NN <<'PENDING'|'APPROVED'|'REJECTED'>>
+    moderator_comment : text                     (V6)
+    created_at : timestamptz NN
+    updated_at : timestamptz NN
+    --
+    UQ (book_id, user_id)
+    IDX idx_reviews_book_id, idx_reviews_user_id, idx_reviews_status
+}
+
+entity "collections" as collections {
+    + PK id : uuid
+    --
+    FK user_id : uuid NN  -> users.id (CASCADE)
+    title       : varchar(255) NN
+    genre       : varchar(100)
+    description : text
+    status      : varchar(50) NN <<'DRAFT'|'PENDING'|'APPROVED'|'REJECTED'>>
+    moderator_comment : text   (V4)
+    created_at : timestamptz NN
+    updated_at : timestamptz NN
+    --
+    IDX idx_collections_user_id, idx_collections_status
+}
+
+entity "collection_books" as collection_books <<M2M>> {
+    + PK,FK collection_id : uuid -> collections.id (CASCADE)
+    + PK,FK book_id       : uuid -> books.id       (CASCADE)
+    --
+    position : integer NN <<default 0>>
+}
+
+users       ||--o{ reviews           : "user_id"
+books       ||--o{ reviews           : "book_id"
+users       ||--o{ collections       : "user_id"
+collections ||--o{ collection_books  : "collection_id"
+books       ||--o{ collection_books  : "book_id"
+
+
+' =====================================================================
+' ПРЕДМЕТНЫЕ ПОДБОРКИ (преподавательские/библиотечные)
+' =====================================================================
+entity "subject_collections" as subject_collections {
+    + PK id : uuid
+    --
+    FK user_id : uuid NN  -> users.id (CASCADE)
+    ' Связь с subjects/specialties — по строкам (legacy после V7)
+    subject        : varchar(255) NN
+    specialty      : varchar(255) NN
+    specialty_name : varchar(255) NN
+    --
+    title       : varchar(255) NN
+    description : text
+    author_role : varchar(100) <<'TEACHER' | 'LIBRARIAN' | ...>>
+    status      : varchar(50)  NN <<'PENDING'|'APPROVED'|'REJECTED'>>
+    moderator_comment : text
+    created_at : timestamptz NN
+    updated_at : timestamptz NN
+}
+
+entity "subject_collection_books" as subject_collection_books <<M2M>> {
+    + PK,FK subject_collection_id : uuid -> subject_collections.id (CASCADE)
+    + PK,FK book_id               : uuid -> books.id               (CASCADE)
+    --
+    position : integer NN <<default 0>>
+}
+
+users                ||--o{ subject_collections      : "user_id"
+subject_collections  ||--o{ subject_collection_books : "subject_collection_id"
+books                ||--o{ subject_collection_books : "book_id"
+
+' Логические (не-FK) связи через имена
+subjects     .[#888,dotted].> subject_collections : "subject (по name)"
+specialties  .[#888,dotted].> subject_collections : "specialty (по name)"
+
+
+' =====================================================================
+' КОММЕНТАРИИ (полиморфные: к рецензии ИЛИ к подборке)
+' =====================================================================
+entity "comments" as comments {
+    + PK id : uuid
+    --
+    FK user_id       : uuid NN  -> users.id       (CASCADE)
+    FK review_id     : uuid     -> reviews.id     (CASCADE)
+    FK collection_id : uuid     -> collections.id (CASCADE)
+    text       : text NN
+    created_at : timestamptz NN
+    updated_at : timestamptz NN
+    --
+    CHECK ( (review_id IS NOT NULL AND collection_id IS NULL)
+         OR (review_id IS NULL AND collection_id IS NOT NULL) )
+}
+
+users       ||--o{ comments : "user_id"
+reviews     ||--o{ comments : "review_id (XOR)"
+collections ||--o{ comments : "collection_id (XOR)"
+
+
+' =====================================================================
+' ЛАЙКИ (полиморфные: к рецензии ИЛИ к комментарию) — V4
+' =====================================================================
+entity "likes" as likes {
+    + PK id : uuid
+    --
+    FK user_id : uuid NN  -> users.id (CASCADE)
+    target_type : varchar(20) NN  <<'REVIEW' | 'COMMENT'>>
+    target_id   : uuid NN          <<нет физического FK>>
+    created_at  : timestamptz NN
+    --
+    UQ (user_id, target_type, target_id)
+    IDX idx_likes_target (target_type, target_id)
+    IDX idx_likes_user   (user_id)
+}
+
+users   ||--o{ likes : "user_id"
+reviews .[#888,dotted].> likes : "target_type='REVIEW'\nlogical FK"
+comments .[#888,dotted].> likes : "target_type='COMMENT'\nlogical FK"
+
+
+' =====================================================================
+' СОБЫТИЯ КЛУБА
+' =====================================================================
+entity "events" as events {
+    + PK id : uuid
+    --
+    title       : varchar(255) NN
+    description : text
+    date        : date NN
+    time        : varchar(10)
+    location    : varchar(255)
+    max_participants : integer
+    organizer   : varchar(255)
+    FK created_by : uuid -> users.id  (ON DELETE SET NULL)
+    created_at : timestamptz NN
+    updated_at : timestamptz NN
+    --
+    IDX idx_events_date (date)
+}
+
+entity "event_participants" as event_participants <<M2M>> {
+    + PK,FK event_id : uuid -> events.id (CASCADE)
+    + PK,FK user_id  : uuid -> users.id  (CASCADE)
+    --
+    registered_at : timestamptz NN
+}
+
+users  ||--o{ events             : "created_by (SET NULL)"
+events ||--o{ event_participants : "event_id"
+users  ||--o{ event_participants : "user_id"
+
+
+' =====================================================================
+' ЗАКАЗЫ / СПИСОК ЧТЕНИЯ
+' =====================================================================
+entity "orders" as orders {
+    + PK id : uuid
+    --
+    FK user_id : uuid NN  -> users.id (CASCADE)
+    FK book_id : uuid NN  -> books.id (CASCADE)
+    status     : varchar(50) NN <<'ACTIVE'|'COMPLETED'|'CANCELLED'>>
+    created_at : timestamptz NN
+    --
+    UQ (user_id, book_id)
+    IDX idx_orders_user_id (user_id)
+}
+
+users ||--o{ orders : "user_id"
+books ||--o{ orders : "book_id"
+
+
+' =====================================================================
+' АКТИВНОСТЬ ПОЛЬЗОВАТЕЛЕЙ (для рекомендательной системы)
+' =====================================================================
+entity "user_activity" as user_activity {
+    + PK id : uuid
+    --
+    FK user_id : uuid NN  -> users.id (CASCADE)
+    FK book_id : uuid NN  -> books.id (CASCADE)
+    activity_type : varchar(50) NN  <<'VIEW'|'LIKE'|'ORDER'|'REVIEW'|...>>
+    created_at : timestamptz NN
+    --
+    IDX idx_activities_user_id (user_id)
+}
+
+users ||--o{ user_activity : "user_id"
+books ||--o{ user_activity : "book_id"
+
+
+' =====================================================================
+' СЛУЖЕБНОЕ
+' =====================================================================
+note bottom of subjects
+  V7-рефакторинг:
+  было UNIQUE(specialty, name) — стало UNIQUE(name) глобально.
+  Один и тот же предмет используется несколькими специальностями
+  через subject_specialties — общая подборка.
+end note
+
+note right of likes
+  Полиморфный лайк: physical FK только на users,
+  на target_id ссылка логическая (REVIEW | COMMENT).
+end note
+
+note right of comments
+  Полиморфный комментарий через CHECK-constraint:
+  ровно одно из (review_id, collection_id) — NOT NULL.
+end note
+
+note right of users
+  role  ∈ {USER, MODERATOR}
+  В UI «admin» = Spring «MODERATOR».
+end note
+
+@enduml

@@ -155,7 +155,7 @@ watch(viewOpen, (open) => {
           :initial-count="Number(c.likes || 0)"
           :initial-liked="!!c.liked"
         />
-        <UButton size="md" variant="outline" class="flex-1 justify-center" @click="openView(c.id)">
+        <UButton size="md" variant="outline" class="flex-1 justify-center bg-white hover:!text-white" @click="openView(c.id)">
           Узнать подробнее
         </UButton>
       </div>
@@ -281,7 +281,7 @@ watch(viewOpen, (open) => {
 
     <template #footer>
       <div class="flex justify-end gap-3 w-full">
-        <UButton variant="outline" class="rounded-xl" @click="viewOpen = false">Закрыть</UButton>
+        <UButton variant="outline" class="rounded-xl bg-white hover:!text-white" @click="viewOpen = false">Закрыть</UButton>
       </div>
     </template>
   </UModal>
