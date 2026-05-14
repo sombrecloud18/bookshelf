@@ -28,56 +28,161 @@ function readTabFromRoute() {
 const activeTab = ref(readTabFromRoute());
 const query = ref('');
 
+const BOOKS_PAGE_SIZE = 20;
+const COLLECTIONS_PAGE_SIZE = 12;
+const EVENTS_PAGE_SIZE = 9;
+
 const books = ref([]);
 const collections = ref([]);
 const clubItems = ref([]);
+
 const booksLoading = ref(false);
+const booksLoadingMore = ref(false);
+const booksPage = ref(0);
+const booksHasMore = ref(true);
+const booksQuery = ref('');
+
 const collectionsLoading = ref(false);
+const collectionsLoadingMore = ref(false);
+const collectionsPage = ref(0);
+const collectionsHasMore = ref(true);
+const collectionsQuery = ref('');
+
+const eventsLoading = ref(false);
+const eventsLoadingMore = ref(false);
+const eventsPage = ref(0);
+const eventsHasMore = ref(true);
 
 let searchTimer = null;
 
+function mapEvent(e) {
+  return {
+    id: e.id,
+    title: e.title,
+    text: e.description,
+    date: e.date,
+    time: e.time,
+    location: e.location,
+    organizer: e.organizer,
+    maxParticipants: e.maxParticipants,
+    participantsCount: e.currentParticipants,
+  };
+}
+
+// Общая утилита: первый или следующий запрос пагинированного эндпоинта.
+async function fetchPage(path, page, size, query) {
+  const params = new URLSearchParams({ page: String(page), size: String(size) });
+  if (query) params.set('query', query);
+  return api.get(`${path}?${params.toString()}`);
+}
+
 async function loadBooks(q = '') {
   booksLoading.value = true;
+  booksPage.value = 0;
+  booksHasMore.value = true;
+  booksQuery.value = q;
   try {
-    const params = q ? `?query=${encodeURIComponent(q)}&size=20` : '?size=20';
-    const data = await api.get(`/books${params}`);
+    const data = await fetchPage('/books', 0, BOOKS_PAGE_SIZE, q);
     books.value = data.content || [];
+    booksHasMore.value = !data.last && (data.content || []).length > 0;
   } catch (e) {
     console.error('Ошибка загрузки книг:', e);
+    booksHasMore.value = false;
   } finally {
     booksLoading.value = false;
   }
 }
 
+async function loadMoreBooks() {
+  if (booksLoadingMore.value || booksLoading.value || !booksHasMore.value) return;
+  booksLoadingMore.value = true;
+  try {
+    const nextPage = booksPage.value + 1;
+    const data = await fetchPage('/books', nextPage, BOOKS_PAGE_SIZE, booksQuery.value);
+    const newItems = data.content || [];
+    if (newItems.length > 0) {
+      books.value = [...books.value, ...newItems];
+      booksPage.value = nextPage;
+    }
+    booksHasMore.value = !data.last && newItems.length > 0;
+  } catch (e) {
+    console.error('Ошибка дозагрузки книг:', e);
+    booksHasMore.value = false;
+  } finally {
+    booksLoadingMore.value = false;
+  }
+}
+
 async function loadCollections(q = '') {
   collectionsLoading.value = true;
+  collectionsPage.value = 0;
+  collectionsHasMore.value = true;
+  collectionsQuery.value = q;
   try {
-    const params = q ? `?query=${encodeURIComponent(q)}&size=20` : '?size=20';
-    const data = await api.get(`/collections${params}`);
+    const data = await fetchPage('/collections', 0, COLLECTIONS_PAGE_SIZE, q);
     collections.value = data.content || [];
+    collectionsHasMore.value = !data.last && (data.content || []).length > 0;
   } catch (e) {
     console.error('Ошибка загрузки подборок:', e);
+    collectionsHasMore.value = false;
   } finally {
     collectionsLoading.value = false;
   }
 }
 
-async function loadEvents() {
+async function loadMoreCollections() {
+  if (collectionsLoadingMore.value || collectionsLoading.value || !collectionsHasMore.value) return;
+  collectionsLoadingMore.value = true;
   try {
-    const data = await api.get('/events?size=10');
-    clubItems.value = (data.content || []).map(e => ({
-      id: e.id,
-      title: e.title,
-      text: e.description,
-      date: e.date,
-      time: e.time,
-      location: e.location,
-      organizer: e.organizer,
-      maxParticipants: e.maxParticipants,
-      participantsCount: e.currentParticipants,
-    }));
+    const nextPage = collectionsPage.value + 1;
+    const data = await fetchPage('/collections', nextPage, COLLECTIONS_PAGE_SIZE, collectionsQuery.value);
+    const newItems = data.content || [];
+    if (newItems.length > 0) {
+      collections.value = [...collections.value, ...newItems];
+      collectionsPage.value = nextPage;
+    }
+    collectionsHasMore.value = !data.last && newItems.length > 0;
+  } catch (e) {
+    console.error('Ошибка дозагрузки подборок:', e);
+    collectionsHasMore.value = false;
+  } finally {
+    collectionsLoadingMore.value = false;
+  }
+}
+
+async function loadEvents() {
+  eventsLoading.value = true;
+  eventsPage.value = 0;
+  eventsHasMore.value = true;
+  try {
+    const data = await fetchPage('/events', 0, EVENTS_PAGE_SIZE);
+    clubItems.value = (data.content || []).map(mapEvent);
+    eventsHasMore.value = !data.last && (data.content || []).length > 0;
   } catch (e) {
     console.error('Ошибка загрузки событий:', e);
+    eventsHasMore.value = false;
+  } finally {
+    eventsLoading.value = false;
+  }
+}
+
+async function loadMoreEvents() {
+  if (eventsLoadingMore.value || eventsLoading.value || !eventsHasMore.value) return;
+  eventsLoadingMore.value = true;
+  try {
+    const nextPage = eventsPage.value + 1;
+    const data = await fetchPage('/events', nextPage, EVENTS_PAGE_SIZE);
+    const newItems = (data.content || []).map(mapEvent);
+    if (newItems.length > 0) {
+      clubItems.value = [...clubItems.value, ...newItems];
+      eventsPage.value = nextPage;
+    }
+    eventsHasMore.value = !data.last && newItems.length > 0;
+  } catch (e) {
+    console.error('Ошибка дозагрузки событий:', e);
+    eventsHasMore.value = false;
+  } finally {
+    eventsLoadingMore.value = false;
   }
 }
 
@@ -178,7 +283,13 @@ onMounted(() => {
         <div v-if="booksLoading" class="flex justify-center py-12">
           <div class="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-500"></div>
         </div>
-        <CatalogTab v-else :books="books" />
+        <CatalogTab
+          v-else
+          :books="books"
+          :has-more="booksHasMore"
+          :loading-more="booksLoadingMore"
+          @load-more="loadMoreBooks"
+        />
       </div>
 
       <!-- Подборки -->
@@ -186,7 +297,14 @@ onMounted(() => {
         <div v-if="collectionsLoading" class="flex justify-center py-12">
           <div class="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-500"></div>
         </div>
-        <CollectionsTab v-else :collections="collections" :books="books" />
+        <CollectionsTab
+          v-else
+          :collections="collections"
+          :books="books"
+          :has-more="collectionsHasMore"
+          :loading-more="collectionsLoadingMore"
+          @load-more="loadMoreCollections"
+        />
       </div>
 
       <!-- Предметы -->
@@ -196,7 +314,17 @@ onMounted(() => {
 
       <!-- Книжный клуб -->
       <div v-else class="mt-6">
-        <ClubTab :items="clubItems" :query="query" />
+        <div v-if="eventsLoading" class="flex justify-center py-12">
+          <div class="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-500"></div>
+        </div>
+        <ClubTab
+          v-else
+          :items="clubItems"
+          :query="query"
+          :has-more="eventsHasMore"
+          :loading-more="eventsLoadingMore"
+          @load-more="loadMoreEvents"
+        />
       </div>
     </div>
   </div>

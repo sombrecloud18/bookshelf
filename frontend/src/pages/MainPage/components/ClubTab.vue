@@ -2,10 +2,22 @@
 import { computed, ref, watch, onUnmounted } from 'vue';
 import { api } from '../../../api.js';
 import { subscribeStomp } from '../../../composables/useStomp.js';
+import { useInfiniteScroll } from '../../../composables/useInfiniteScroll.js';
 
 const props = defineProps({
   items: { type: Array, default: () => [] },
   query: { type: String, default: '' },
+  hasMore: { type: Boolean, default: false },
+  loadingMore: { type: Boolean, default: false },
+});
+const emit = defineEmits(['load-more']);
+
+const sentinel = ref(null);
+useInfiniteScroll(sentinel, {
+  hasMore: () => props.hasMore,
+  loading: () => props.loadingMore,
+  onLoad: () => emit('load-more'),
+  reactiveTriggers: () => [props.hasMore, props.loadingMore, props.items.length],
 });
 
 const filteredItems = computed(() => {
@@ -140,6 +152,7 @@ async function cancelGoing() {
 </script>
 
 <template>
+  <div>
   <div
     v-if="filteredItems.length === 0 && props.query"
     class="bg-white rounded-2xl p-6 text-sm text-gray-500 text-center"
@@ -163,6 +176,16 @@ async function cancelGoing() {
         <UButton variant="outline" class="rounded-xl bg-white hover:!text-white" @click="openDetails(i.id)">Подробнее</UButton>
       </div>
     </UCard>
+  </div>
+
+  <div ref="sentinel" class="h-1" aria-hidden="true"></div>
+
+  <div v-if="loadingMore" class="flex justify-center py-8">
+    <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
+  </div>
+  <div v-else-if="!hasMore && items.length > 0 && !props.query" class="text-center py-6 text-sm text-gray-500">
+    Это все мероприятия
+  </div>
   </div>
 
   <UModal v-model:open="open" title="Книжный клуб" class="z-100">

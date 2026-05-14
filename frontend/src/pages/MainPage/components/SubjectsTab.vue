@@ -83,6 +83,10 @@ const subjectsLoading = ref(false);
 const subjectCollections = ref([]);
 const booksForCollections = ref([]);
 const collectionsLoading = ref(false);
+const collectionsLoadingMore = ref(false);
+const collectionsPage = ref(0);
+const collectionsHasMore = ref(true);
+const SUBJECT_COLLECTIONS_PAGE_SIZE = 12;
 
 const breadcrumbs = computed(() => {
   const items = [{ key: 'root', label: 'Специальности' }];
@@ -135,24 +139,67 @@ watch(selectedSpecialty, async (specialty, prev) => {
   }
 }, { immediate: true });
 
+function buildSubjectCollectionsUrl(page) {
+  const params = new URLSearchParams({
+    subject: selectedSubject.value,
+    specialty: selectedSpecialty.value,
+    page: String(page),
+    size: String(SUBJECT_COLLECTIONS_PAGE_SIZE),
+  });
+  return `/subject-collections?${params.toString()}`;
+}
+
+// Подтягивает обложки только для тех id, которых ещё нет в booksForCollections.
+async function ensureCoversFor(items) {
+  const known = new Set(booksForCollections.value.map(b => b.id));
+  const missing = [...new Set(items.flatMap(c => c.bookIds || []))].filter(id => !known.has(id));
+  if (missing.length === 0) return;
+  try {
+    const newBooks = await api.post('/books/by-ids', { ids: missing });
+    booksForCollections.value = [...booksForCollections.value, ...newBooks];
+  } catch (e) {
+    console.error('Ошибка загрузки обложек:', e);
+  }
+}
+
 async function loadSubjectCollections() {
   if (!selectedSubject.value || !selectedSpecialty.value) return;
   collectionsLoading.value = true;
+  collectionsPage.value = 0;
+  collectionsHasMore.value = true;
   try {
-    const data = await api.get(
-      `/subject-collections?subject=${encodeURIComponent(selectedSubject.value)}&specialty=${encodeURIComponent(selectedSpecialty.value)}&size=50`,
-    );
+    const data = await api.get(buildSubjectCollectionsUrl(0));
     subjectCollections.value = data.content || [];
-    const allIds = [...new Set(subjectCollections.value.flatMap(c => c.bookIds || []))];
-    if (allIds.length > 0) {
-      booksForCollections.value = await api.post('/books/by-ids', { ids: allIds });
-    } else {
-      booksForCollections.value = [];
-    }
+    collectionsHasMore.value = !data.last && (data.content || []).length > 0;
+    booksForCollections.value = [];
+    await ensureCoversFor(subjectCollections.value);
   } catch (e) {
     console.error('Ошибка загрузки подборок:', e);
+    collectionsHasMore.value = false;
   } finally {
     collectionsLoading.value = false;
+  }
+}
+
+async function loadMoreSubjectCollections() {
+  if (collectionsLoadingMore.value || collectionsLoading.value || !collectionsHasMore.value) return;
+  if (!selectedSubject.value || !selectedSpecialty.value) return;
+  collectionsLoadingMore.value = true;
+  try {
+    const nextPage = collectionsPage.value + 1;
+    const data = await api.get(buildSubjectCollectionsUrl(nextPage));
+    const newItems = data.content || [];
+    if (newItems.length > 0) {
+      subjectCollections.value = [...subjectCollections.value, ...newItems];
+      collectionsPage.value = nextPage;
+      await ensureCoversFor(newItems);
+    }
+    collectionsHasMore.value = !data.last && newItems.length > 0;
+  } catch (e) {
+    console.error('Ошибка дозагрузки подборок:', e);
+    collectionsHasMore.value = false;
+  } finally {
+    collectionsLoadingMore.value = false;
   }
 }
 
@@ -333,7 +380,15 @@ async function submitAdd() {
     >
       По запросу «{{ props.query }}» подборок не найдено.
     </div>
-    <CollectionsTab v-else :collections="filteredSubjectCollections" :books="booksForCollections" type="SUBJECT_COLLECTION" />
+    <CollectionsTab
+      v-else
+      :collections="filteredSubjectCollections"
+      :books="booksForCollections"
+      type="SUBJECT_COLLECTION"
+      :has-more="collectionsHasMore && !lowerQuery"
+      :loading-more="collectionsLoadingMore"
+      @load-more="loadMoreSubjectCollections"
+    />
   </div>
 
   <UModal v-model:open="addOpen" title="Добавить подборку" class="z-100">

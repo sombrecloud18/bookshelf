@@ -3,6 +3,7 @@ import { computed, ref, watch } from 'vue';
 import { getGenreColor } from '../../../constants/genreColors';
 import { api } from '../../../api.js';
 import LikeButton from '../../../components/LikeButton.vue';
+import { useInfiniteScroll } from '../../../composables/useInfiniteScroll.js';
 
 const props = defineProps({
   collections: { type: Array, default: () => [] },
@@ -10,6 +11,17 @@ const props = defineProps({
   // 'COLLECTION' for user-made book sets, 'SUBJECT_COLLECTION' for academic ones —
   // drives which /api/comments/* and /api/likes/* endpoints we hit from the modal.
   type: { type: String, default: 'COLLECTION' },
+  hasMore: { type: Boolean, default: false },
+  loadingMore: { type: Boolean, default: false },
+});
+const emit = defineEmits(['load-more']);
+
+const sentinel = ref(null);
+useInfiniteScroll(sentinel, {
+  hasMore: () => props.hasMore,
+  loading: () => props.loadingMore,
+  onLoad: () => emit('load-more'),
+  reactiveTriggers: () => [props.hasMore, props.loadingMore, props.collections.length],
 });
 
 const booksById = computed(() => Object.fromEntries(props.books.map(b => [b.id, b])));
@@ -95,6 +107,7 @@ watch(viewOpen, (open) => {
 </script>
 
 <template>
+  <div>
   <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 auto-rows-fr">
     <UCard
       v-for="c in collections"
@@ -160,6 +173,16 @@ watch(viewOpen, (open) => {
         </UButton>
       </div>
     </UCard>
+  </div>
+
+  <div ref="sentinel" class="h-1" aria-hidden="true"></div>
+
+  <div v-if="loadingMore" class="flex justify-center py-8">
+    <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
+  </div>
+  <div v-else-if="!hasMore && collections.length > 0" class="text-center py-6 text-sm text-gray-500">
+    Это все подборки
+  </div>
   </div>
 
   <UModal v-model:open="viewOpen" title="Подборка" class="z-100">
