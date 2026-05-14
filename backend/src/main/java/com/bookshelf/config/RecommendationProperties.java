@@ -27,6 +27,8 @@ public class RecommendationProperties {
         private int interactionsMax = 50;
         private double noiseRatio = 0.08;
         private long seed = 42L;
+        /** Fraction of generated users that are teachers (rest — students). */
+        private double teacherRatio = 0.12;
     }
 
     @Data

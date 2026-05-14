@@ -61,11 +61,8 @@
             <artifactId>flyway-core</artifactId>
         </dependency>
 
-        <dependency>
-            <groupId>org.flywaydb</groupId>
-            <artifactId>flyway-database-postgresql</artifactId>
-            <version>12.3.0</version>
-        </dependency>
+        <!-- flyway-database-postgresql отдельным артефактом нужен только для Flyway 10+;
+             в Spring Boot 3.2 (Flyway 9.22.3) PostgreSQL-поддержка уже встроена в flyway-core. -->
 
         <!-- Lombok -->
         <dependency>

@@ -12,6 +12,7 @@ const router = useRouter();
 const book = ref(null);
 const reviews = ref([]);
 const loading = ref(true);
+const coverFailed = ref(false);
 const newReview = ref({ rating: 0, text: '' });
 const showReviewForm = ref(false);
 const reviewSubmitted = ref(false);
@@ -140,10 +141,18 @@ function reserve() {
           <!-- Обложка -->
           <div class="flex justify-center md:justify-center">
             <img
+              v-if="(book.coverUrl || book.imageUrl) && !coverFailed"
               class="w-full rounded-2xl shadow-lg object-cover"
               :src="book.coverUrl || book.imageUrl"
               :alt="book.title"
+              @error="coverFailed = true"
             />
+            <div
+              v-else
+              class="w-full aspect-2/3 rounded-2xl shadow-lg bg-gray-100 flex items-center justify-center text-gray-400"
+            >
+              Нет обложки
+            </div>
           </div>
 
           <!-- Детали книги -->

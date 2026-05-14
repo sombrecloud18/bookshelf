@@ -49,10 +49,11 @@
 
     <div class="aspect-2/3 w-full overflow-hidden rounded-lg mt-4 bg-gray-100 flex items-center justify-center">
       <img
-        v-if="imageUrl"
+        v-if="imageUrl && !imageFailed"
         class="max-h-full max-w-full object-contain hover:scale-105 transition-transform duration-300"
         :src="imageUrl"
         :alt="title"
+        @error="imageFailed = true"
       />
       <span v-else class="text-xs text-gray-400">Нет обложки</span>
     </div>
@@ -65,7 +66,7 @@
 </template>
 
 <script setup>
-import { computed } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import { getGenreColor } from '../constants/genreColors';
 
@@ -83,6 +84,11 @@ const props = defineProps({
 
 defineEmits(['toggle-order']);
 const router = useRouter();
+
+// Open Library returns 404 when ?default=false и обложка отсутствует — в этом случае
+// показываем «Нет обложки» вместо битой 1×1 заглушки. Сбрасываем флаг при смене URL.
+const imageFailed = ref(false);
+watch(() => props.imageUrl, () => { imageFailed.value = false; });
 
 const matchPercent = computed(() => {
   if (props.matchScore === null || props.matchScore === undefined) return null;

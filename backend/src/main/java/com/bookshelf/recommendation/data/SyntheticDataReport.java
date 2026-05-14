@@ -14,12 +14,15 @@ import java.util.Map;
 public class SyntheticDataReport {
     private long seed;
     private int totalUsers;
+    private int totalStudents;
+    private int totalTeachers;
     private Map<String, Integer> usersPerPersona;
     private int totalActivities;
     private int totalReviews;
     private int totalOrders;
     private int totalCollections;
     private int totalCollectionBooks;
+    private int totalSubjectCollections;
     private double interactionDensity;   // activities / (users × books)
     private long elapsedMs;
     private String message;
